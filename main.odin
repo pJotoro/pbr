@@ -286,69 +286,47 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
     physical_device_vertex_input_dynamic_state_features.sType = .PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT
     vk.GetPhysicalDeviceFeatures2(physical_device, &physical_device_features)
 
-    // TODO: Which features should I use?
-
-    when !VULKAN_DEBUG {
-        physical_device_features.features.robustBufferAccess = false
-    }
+    physical_device_features.features.robustBufferAccess = false
     physical_device_features.features.fullDrawIndexUint32 = false
     physical_device_features.features.imageCubeArray = false
     physical_device_features.features.independentBlend = false
     physical_device_features.features.geometryShader = false
-    if !physical_device_features.features.tessellationShader {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_features.features.tessellationShader = false
     physical_device_features.features.sampleRateShading = false
     physical_device_features.features.dualSrcBlend = false
     physical_device_features.features.logicOp = false
-    if !physical_device_features.features.multiDrawIndirect {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_features.features.multiDrawIndirect = false
     physical_device_features.features.drawIndirectFirstInstance = false
-    if !physical_device_features.features.depthClamp {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
-    if !physical_device_features.features.depthBiasClamp {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_features.features.depthClamp = false
+    physical_device_features.features.depthBiasClamp = false
     physical_device_features.features.fillModeNonSolid = false
     physical_device_features.features.depthBounds = false
     physical_device_features.features.wideLines = false
     physical_device_features.features.largePoints = false
     physical_device_features.features.alphaToOne = false
     physical_device_features.features.multiViewport = false
-    if !physical_device_features.features.samplerAnisotropy {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_features.features.samplerAnisotropy = false
     physical_device_features.features.textureCompressionETC2 = false
     physical_device_features.features.textureCompressionASTC_LDR = false
-    if !physical_device_features.features.textureCompressionBC {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_features.features.textureCompressionBC = false
     physical_device_features.features.occlusionQueryPrecise = false
     physical_device_features.features.pipelineStatisticsQuery = false
     physical_device_features.features.vertexPipelineStoresAndAtomics = false
     physical_device_features.features.fragmentStoresAndAtomics = false
     physical_device_features.features.shaderTessellationAndGeometryPointSize = false
-    if !physical_device_features.features.shaderImageGatherExtended {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_features.features.shaderImageGatherExtended = false
     physical_device_features.features.shaderStorageImageExtendedFormats = false
     physical_device_features.features.shaderStorageImageMultisample = false
     physical_device_features.features.shaderStorageImageReadWithoutFormat = false
     physical_device_features.features.shaderStorageImageWriteWithoutFormat = false
     physical_device_features.features.shaderUniformBufferArrayDynamicIndexing = false
-    if !physical_device_features.features.shaderSampledImageArrayDynamicIndexing {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_features.features.shaderSampledImageArrayDynamicIndexing = false
     physical_device_features.features.shaderStorageBufferArrayDynamicIndexing = false
     physical_device_features.features.shaderStorageImageArrayDynamicIndexing = false
     physical_device_features.features.shaderClipDistance = false
     physical_device_features.features.shaderCullDistance = false
     physical_device_features.features.shaderFloat64 = false
-    if !physical_device_features.features.shaderInt64 {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_features.features.shaderInt64 = false
     physical_device_features.features.shaderInt16 = false
     physical_device_features.features.shaderResourceResidency = false
     physical_device_features.features.shaderResourceMinLod = false
@@ -375,14 +353,10 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
     physical_device_vulkan_11_features.variablePointers = false
     physical_device_vulkan_11_features.protectedMemory = false
     physical_device_vulkan_11_features.samplerYcbcrConversion = false
-    if !physical_device_vulkan_11_features.shaderDrawParameters {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_vulkan_11_features.shaderDrawParameters = false
 
     physical_device_vulkan_12_features.samplerMirrorClampToEdge = false
-    if !physical_device_vulkan_12_features.drawIndirectCount {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_vulkan_12_features.drawIndirectCount = false
     physical_device_vulkan_12_features.storageBuffer8BitAccess = false
     physical_device_vulkan_12_features.uniformAndStorageBuffer8BitAccess = false
     physical_device_vulkan_12_features.storagePushConstant8 = false
@@ -390,16 +364,12 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
     physical_device_vulkan_12_features.shaderSharedInt64Atomics = false
     physical_device_vulkan_12_features.shaderFloat16 = false // NOTE: I would use this if my laptop supported it!
     physical_device_vulkan_12_features.shaderInt8 = false
-    if !physical_device_vulkan_12_features.descriptorIndexing {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_vulkan_12_features.descriptorIndexing = false
     physical_device_vulkan_12_features.shaderInputAttachmentArrayDynamicIndexing = false
     physical_device_vulkan_12_features.shaderUniformTexelBufferArrayDynamicIndexing = false
     physical_device_vulkan_12_features.shaderStorageTexelBufferArrayDynamicIndexing = false
     physical_device_vulkan_12_features.shaderUniformBufferArrayNonUniformIndexing = false
-    if !physical_device_vulkan_12_features.shaderSampledImageArrayNonUniformIndexing {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_vulkan_12_features.shaderSampledImageArrayNonUniformIndexing = false
     physical_device_vulkan_12_features.shaderStorageBufferArrayNonUniformIndexing = false
     physical_device_vulkan_12_features.shaderStorageImageArrayNonUniformIndexing = false
     physical_device_vulkan_12_features.shaderInputAttachmentArrayNonUniformIndexing = false
@@ -412,15 +382,9 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
     physical_device_vulkan_12_features.descriptorBindingUniformTexelBufferUpdateAfterBind = false
     physical_device_vulkan_12_features.descriptorBindingStorageTexelBufferUpdateAfterBind = false
     physical_device_vulkan_12_features.descriptorBindingUpdateUnusedWhilePending = false
-    if !physical_device_vulkan_12_features.descriptorBindingPartiallyBound {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
-    if !physical_device_vulkan_12_features.descriptorBindingVariableDescriptorCount {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
-    if !physical_device_vulkan_12_features.runtimeDescriptorArray {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_vulkan_12_features.descriptorBindingPartiallyBound = false
+    physical_device_vulkan_12_features.descriptorBindingVariableDescriptorCount = false
+    physical_device_vulkan_12_features.runtimeDescriptorArray = false
     physical_device_vulkan_12_features.samplerFilterMinmax = false // NOTE: I would use this if my laptop supported it!
     physical_device_vulkan_12_features.scalarBlockLayout = false
     physical_device_vulkan_12_features.imagelessFramebuffer = false
@@ -429,53 +393,33 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
     physical_device_vulkan_12_features.separateDepthStencilLayouts = false
     physical_device_vulkan_12_features.hostQueryReset = false
     physical_device_vulkan_12_features.timelineSemaphore = false
-    if !physical_device_vulkan_12_features.bufferDeviceAddress {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_vulkan_12_features.bufferDeviceAddress = false
     physical_device_vulkan_12_features.bufferDeviceAddressCaptureReplay = false
     physical_device_vulkan_12_features.bufferDeviceAddressMultiDevice = false
-    if !physical_device_vulkan_12_features.vulkanMemoryModel {
-        return .ERROR_FEATURE_NOT_PRESENT        
-    }
-    if !physical_device_vulkan_12_features.vulkanMemoryModelDeviceScope {
-        return .ERROR_FEATURE_NOT_PRESENT        
-    }
-    if !physical_device_vulkan_12_features.vulkanMemoryModelAvailabilityVisibilityChains {
-        return .ERROR_FEATURE_NOT_PRESENT        
-    }
+    physical_device_vulkan_12_features.vulkanMemoryModel = false        
+    physical_device_vulkan_12_features.vulkanMemoryModelDeviceScope = false        
+    physical_device_vulkan_12_features.vulkanMemoryModelAvailabilityVisibilityChains = false        
     physical_device_vulkan_12_features.shaderOutputViewportIndex = false
     physical_device_vulkan_12_features.shaderOutputLayer = false
     physical_device_vulkan_12_features.subgroupBroadcastDynamicId = false
 
-    when !VULKAN_DEBUG {
-        physical_device_vulkan_13_features.robustImageAccess = false
-    }
+    physical_device_vulkan_13_features.robustImageAccess = false
     physical_device_vulkan_13_features.inlineUniformBlock = false
     physical_device_vulkan_13_features.descriptorBindingInlineUniformBlockUpdateAfterBind = false
-    if !physical_device_vulkan_13_features.pipelineCreationCacheControl {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_vulkan_13_features.pipelineCreationCacheControl = false
     physical_device_vulkan_13_features.privateData = false
-    if !physical_device_vulkan_13_features.shaderDemoteToHelperInvocation {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_vulkan_13_features.shaderDemoteToHelperInvocation = false
     physical_device_vulkan_13_features.shaderTerminateInvocation = false
-    if !physical_device_vulkan_13_features.subgroupSizeControl {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_vulkan_13_features.subgroupSizeControl = false
     physical_device_vulkan_13_features.computeFullSubgroups = false
-    if !physical_device_vulkan_13_features.synchronization2 {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_vulkan_13_features.synchronization2 = false
     physical_device_vulkan_13_features.textureCompressionASTC_HDR = false
     physical_device_vulkan_13_features.shaderZeroInitializeWorkgroupMemory = false
     if !physical_device_vulkan_13_features.dynamicRendering {
         return .ERROR_FEATURE_NOT_PRESENT
     }
     physical_device_vulkan_13_features.shaderIntegerDotProduct = false
-    if !physical_device_vulkan_13_features.maintenance4 {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_vulkan_13_features.maintenance4 = false
 
     physical_device_extended_dynamic_state_3_features.extendedDynamicState3TessellationDomainOrigin = false
     physical_device_extended_dynamic_state_3_features.extendedDynamicState3DepthClampEnable = false
@@ -509,9 +453,7 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
     physical_device_extended_dynamic_state_3_features.extendedDynamicState3RepresentativeFragmentTestEnable = false
     physical_device_extended_dynamic_state_3_features.extendedDynamicState3ShadingRateImageEnable = false
 
-    if !physical_device_vertex_input_dynamic_state_features.vertexInputDynamicState {
-        return .ERROR_FEATURE_NOT_PRESENT
-    }
+    physical_device_vertex_input_dynamic_state_features.vertexInputDynamicState = false
 
     {
         // TODO: What about vk.GetPhysicalDeviceQueueFamilyProperties2?
@@ -726,7 +668,7 @@ vulkan_update :: proc(using vulkan: ^Vulkan) -> vk.Result {
     {
         info := vk.RenderingInfo {
             sType = .RENDERING_INFO,
-            
+
         }
     }
 
