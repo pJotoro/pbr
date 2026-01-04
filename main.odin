@@ -7,6 +7,8 @@ import "core:mem"
 import vk "vendor:vulkan"
 import "core:debug/trace"
 import "vendor:cgltf"
+import "core:os"
+import "core:fmt"
 
 VULKAN_DEBUG :: #config(VULKAN_DEBUG, ODIN_DEBUG)
 VULKAN_VALIDATION :: #config(VULKAN_VALIDATION, VULKAN_DEBUG)
@@ -450,6 +452,37 @@ vulkan_update :: proc(using vulkan: ^Vulkan) -> vk.Result {
     return .SUCCESS
 }
 
+cgltf_load :: proc(name: string) -> (out_data: ^cgltf.data, res: cgltf.result) {
+    file_data, ok := os.read_entire_file(name, context.temp_allocator)
+    if !ok {
+        res = .file_not_found
+        return
+    }
+
+    alloc_proc :: proc "c" (user: rawptr, size: uint) -> rawptr {
+        context = runtime.default_context()
+        data := make([]byte, size, context.temp_allocator)
+        return raw_data(data)
+    }
+
+    free_proc :: proc "c" (user: rawptr, ptr: rawptr) {
+
+    }
+
+    memory_options := cgltf.memory_options {
+        alloc_func = alloc_proc,
+        free_func = free_proc,
+        user_data = nil,
+    }
+
+    options := cgltf.options {
+        type = .glb,
+        memory = memory_options,
+    }
+
+    return cgltf.parse(options, raw_data(file_data), len(file_data))
+}
+
 main :: proc() {
     when STACK_TRACE {
         trace.init(&global_trace_ctx)
@@ -463,6 +496,12 @@ main :: proc() {
     vulkan.arena = mem.arena_allocator(&{data = make([]byte, mem.Megabyte)})
     if res := vulkan_init(&vulkan); res != .SUCCESS {
         app_panic("Your graphics driver is out of date.")
+    }
+
+    if data, res := cgltf_load("assets/chocolate_donut.glb"); res != .success {
+        app_panic("Failed to load assets/chocolate_donut.glb")
+    } else {
+        fmt.printf("%#v\n", data)
     }
 
     for app_update() {
