@@ -437,7 +437,123 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
 
     vk.CreateSampler(device, &{sType = .SAMPLER_CREATE_INFO}, nil, &default_sampler) or_return
 
+    /*
+    Parts of gltf file I don't handle yet that I have to:
 
+    meshes
+    materials
+    accessors
+    nodes
+    extensions    
+    */
+
+    vertex_buffer_create_info := vk.BufferCreateInfo {
+        sType = .BUFFER_CREATE_INFO,
+        usage = {.TRANSFER_DST, .VERTEX_BUFFER},
+    }
+    index_buffer_create_info := vk.BufferCreateInfo {
+        sType = .BUFFER_CREATE_INFO,
+        usage = {.TRANSFER_DST, .INDEX_BUFFER},
+    }
+    staging_buffer_create_info := vk.BufferCreateInfo {
+        sType = .BUFFER_CREATE_INFO,
+        usage = {.TRANSFER_SRC},
+    }
+
+
+    if data, res := cgltf_load("assets/chocolate_donut.glb"); res != .success {
+        app_panic("Failed to load assets/chocolate_donut.glb")
+    } else {
+        // vertex_inputs := make([dynamic]vk.PipelineVertexInputStateCreateInfo, 0, len(data.meshes), context.temp_allocator)
+        // for mesh in data.meshes {
+        //     attributes := make([dynamic]vk.VertexInputAttributeDescription, 0, len(mesh.primitives), context.temp_allocator)
+        //     bindings := make([dynamic]vk.VertexInputBindingDescription, 0, len(mesh.primitives), context.temp_allocator)
+        //     for primitive, location in mesh.primitives {
+        //         attribute := vk.VertexInputAttributeDescription {
+        //             location = u32(location),
+
+        //         }
+        //     }
+        //     vertex_input := vk.PipelineVertexInputStateCreateInfo {
+        //         sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        //     }
+        // }
+
+        for mesh in data.meshes {
+            // mesh.name
+            // mesh.primitives
+            assert(mesh.weights == nil)
+            assert(mesh.target_names == nil)
+            assert(mesh.extras.data == nil)
+            assert(mesh.extensions_count == 0)
+
+            for primitive in mesh.primitives {
+                assert(primitive.type == .triangles)
+                assert(primitive.indices.component_type == .r_16u)
+                assert(!primitive.indices.normalized)
+                assert(primitive.indices.type == .scalar)
+                assert(primitive.indices.offset == 0)
+                assert(primitive.indices.count == 6 || primitive.indices.count == 36)
+                assert(primitive.indices.stride == 2)
+                // primitive.buffer_view
+                assert(!primitive.indices.has_min)
+                assert(!primitive.indices.has_max)
+                assert(!primitive.indices.is_sparse)
+                assert(primitive.indices.extras.data == nil)
+                assert(primitive.indices.extensions_count == 0)
+                // primitive.material
+                // primitive.attributes
+                assert(primitive.targets == nil)
+                assert(primitive.extras.data == nil)
+                assert(!primitive.has_draco_mesh_compression)
+                assert(primitive.mappings == nil)
+                assert(primitive.extensions_count == 0)
+
+                fmt.printf("%#v\n", primitive)
+            }
+        }
+
+        vertex_buffer_offset := 0
+        index_buffer_offset := 0
+
+        for buffer_view in data.buffer_views {
+            assert(buffer_view.stride == 0 && buffer_view.data == nil && !buffer_view.has_meshopt_compression && buffer_view.extras.data == nil && buffer_view.extensions_count == 0)
+
+            switch buffer_view.type {
+                case .vertices:
+                    vertex_buffer_create_info.size += vk.DeviceSize(buffer_view.size)
+                    append(&vertex_buffer_regions, vk.BufferCopy{
+                        srcOffset = vk.DeviceSize(buffer_view.offset),
+                        dstOffset = vk.DeviceSize(vertex_buffer_offset),
+                        size = vk.DeviceSize(buffer_view.size),
+                    })
+
+                case .indices:
+                    index_buffer_create_info.size += vk.DeviceSize(buffer_view.size)
+                    append(&index_buffer_regions, vk.BufferCopy{
+                        srcOffset = vk.DeviceSize(buffer_view.offset),
+                        dstOffset = vk.DeviceSize(index_buffer_offset),
+                        size = vk.DeviceSize(buffer_view.size),
+                    })
+
+                case .invalid:
+                    app_panic("Invalid buffer view type.")
+            }
+        }
+
+        vertex_buffer = vulkan_create_buffer(device, &physical_device_memory_properties, &vertex_buffer_create_info, {.DEVICE_LOCAL}) or_return
+        index_buffer = vulkan_create_buffer(device, &physical_device_memory_properties, &index_buffer_create_info, {.DEVICE_LOCAL}) or_return
+        staging_buffer_create_info.size = vertex_buffer_create_info.size + index_buffer_create_info.size
+        staging_buffer = vulkan_create_buffer(device, &physical_device_memory_properties, &staging_buffer_create_info, {.HOST_VISIBLE, .HOST_COHERENT}) or_return
+
+        // NOTE: This happens to be true for the donut model. It might not be true for other models.
+        assert(int(staging_buffer_create_info.size) == len(data.bin))
+
+        m: rawptr
+        vk.MapMemory(device, staging_buffer.memory, 0, staging_buffer_create_info.size, {}, &m) or_return
+        intrinsics.mem_copy(m, raw_data(data.bin), staging_buffer_create_info.size)
+        vk.UnmapMemory(device, staging_buffer.memory)
+    }
 
     return .SUCCESS
 }
@@ -524,78 +640,6 @@ vulkan_create_buffer :: proc(device: vk.Device, memory_properties: ^vk.PhysicalD
     return
 }
 
-vulkan_load_assets :: proc(using vulkan: ^Vulkan) -> vk.Result {
-    /*
-    Parts of gltf file I don't handle yet that I have to:
-
-    meshes
-    materials
-    accessors
-    nodes
-    extensions    
-    */
-
-    vertex_buffer_create_info := vk.BufferCreateInfo {
-        sType = .BUFFER_CREATE_INFO,
-        usage = {.TRANSFER_DST, .VERTEX_BUFFER},
-    }
-    index_buffer_create_info := vk.BufferCreateInfo {
-        sType = .BUFFER_CREATE_INFO,
-        usage = {.TRANSFER_DST, .INDEX_BUFFER},
-    }
-    staging_buffer_create_info := vk.BufferCreateInfo {
-        sType = .BUFFER_CREATE_INFO,
-        usage = {.TRANSFER_SRC},
-    }
-
-    if data, res := cgltf_load("assets/chocolate_donut.glb"); res != .success {
-        app_panic("Failed to load assets/chocolate_donut.glb")
-    } else {
-        vertex_buffer_offset := 0
-        index_buffer_offset := 0
-
-        for buffer_view in data.buffer_views {
-            assert(buffer_view.stride == 0 && buffer_view.data == nil && !buffer_view.has_meshopt_compression && buffer_view.extras.data == nil && buffer_view.extensions_count == 0)
-
-            switch buffer_view.type {
-                case .vertices:
-                    vertex_buffer_create_info.size += vk.DeviceSize(buffer_view.size)
-                    append(&vertex_buffer_regions, vk.BufferCopy{
-                        srcOffset = vk.DeviceSize(buffer_view.offset),
-                        dstOffset = vk.DeviceSize(vertex_buffer_offset),
-                        size = vk.DeviceSize(buffer_view.size),
-                    })
-
-                case .indices:
-                    index_buffer_create_info.size += vk.DeviceSize(buffer_view.size)
-                    append(&index_buffer_regions, vk.BufferCopy{
-                        srcOffset = vk.DeviceSize(buffer_view.offset),
-                        dstOffset = vk.DeviceSize(index_buffer_offset),
-                        size = vk.DeviceSize(buffer_view.size),
-                    })
-
-                case .invalid:
-                    app_panic("Invalid buffer view type.")
-            }
-        }
-
-        vertex_buffer = vulkan_create_buffer(device, &physical_device_memory_properties, &vertex_buffer_create_info, {.DEVICE_LOCAL}) or_return
-        index_buffer = vulkan_create_buffer(device, &physical_device_memory_properties, &index_buffer_create_info, {.DEVICE_LOCAL}) or_return
-        staging_buffer_create_info.size = vertex_buffer_create_info.size + index_buffer_create_info.size
-        staging_buffer = vulkan_create_buffer(device, &physical_device_memory_properties, &staging_buffer_create_info, {.HOST_VISIBLE, .HOST_COHERENT}) or_return
-
-        // NOTE: This happens to be true for the donut model. It might not be true for other models.
-        assert(int(staging_buffer_create_info.size) == len(data.bin))
-
-        m: rawptr
-        vk.MapMemory(device, staging_buffer.memory, 0, staging_buffer_create_info.size, {}, &m) or_return
-        intrinsics.mem_copy(m, raw_data(data.bin), staging_buffer_create_info.size)
-        vk.UnmapMemory(device, staging_buffer.memory)
-    }
-
-    return .SUCCESS
-}
-
 main :: proc() {
     when STACK_TRACE {
         trace.init(&global_trace_ctx)
@@ -609,10 +653,6 @@ main :: proc() {
     vulkan.arena = mem.arena_allocator(&{data = make([]byte, mem.Megabyte)})
     if res := vulkan_init(&vulkan); res != .SUCCESS {
         app_panic("Your graphics driver is out of date.")
-    }
-
-    if res := vulkan_load_assets(&vulkan); res != .SUCCESS {
-        app_panic("Failed to load assets.")
     }
 
     for app_update() {
