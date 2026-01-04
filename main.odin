@@ -62,7 +62,7 @@ Vulkan :: struct {
     frames: []Vulkan_Frame,
     current_frame: int,
 
-    vertex_buffer, index_buffer: vk.Buffer,
+    vertex_buffer, index_buffer, staging_buffer: Vulkan_Buffer,
 
     vert_shader_module: vk.ShaderModule,
     frag_shader_module: vk.ShaderModule,
@@ -517,21 +517,7 @@ vulkan_create_buffer :: proc(device: vk.Device, memory_properties: ^vk.PhysicalD
     return
 }
 
-main :: proc() {
-    when STACK_TRACE {
-        trace.init(&global_trace_ctx)
-        context.assertion_failure_proc = debug_trace_assertion_failure_proc
-    }
-
-    w, h, refresh_rate := app_init()
-    dt := 1.0/f32(refresh_rate)
-
-    vulkan: Vulkan
-    vulkan.arena = mem.arena_allocator(&{data = make([]byte, mem.Megabyte)})
-    if res := vulkan_init(&vulkan); res != .SUCCESS {
-        app_panic("Your graphics driver is out of date.")
-    }
-
+vulkan_load_assets :: proc(using vulkan: ^Vulkan) -> vk.Result {
     vertex_buffer_create_info := vk.BufferCreateInfo {
         sType = .BUFFER_CREATE_INFO,
         usage = {.TRANSFER_DST, .VERTEX_BUFFER},
@@ -563,31 +549,40 @@ main :: proc() {
             }
         }
 
-        for texture in data.textures {
+        vertex_buffer = vulkan_create_buffer(device, &physical_device_memory_properties, &vertex_buffer_create_info, {.DEVICE_LOCAL}) or_return
+        index_buffer = vulkan_create_buffer(device, &physical_device_memory_properties, &index_buffer_create_info, {.DEVICE_LOCAL}) or_return
+        staging_buffer_create_info.size = vertex_buffer_create_info.size + index_buffer_create_info.size
+        staging_buffer = vulkan_create_buffer(device, &physical_device_memory_properties, &staging_buffer_create_info, {.HOST_VISIBLE, .HOST_COHERENT}) or_return
 
-        }
+        // NOTE: This happens to be true for the donut model. It might not be true for other models.
+        assert(int(staging_buffer_create_info.size) == len(data.bin))
+
+        m: rawptr
+        vk.MapMemory(device, staging_buffer.memory, 0, staging_buffer_create_info.size, {}, &m) or_return
+        intrinsics.mem_copy(m, raw_data(data.bin), staging_buffer_create_info.size)
+        vk.UnmapMemory(device, staging_buffer.memory)
     }
 
-    vertex_buffer: Vulkan_Buffer
-    if b, res := vulkan_create_buffer(vulkan.device, &vulkan.physical_device_memory_properties, &vertex_buffer_create_info, {.DEVICE_LOCAL}); res != .SUCCESS {
-        app_panic("Failed to create vertex buffer.")
-    } else {
-        vertex_buffer = b
+    return .SUCCESS
+}
+
+main :: proc() {
+    when STACK_TRACE {
+        trace.init(&global_trace_ctx)
+        context.assertion_failure_proc = debug_trace_assertion_failure_proc
     }
 
-    index_buffer: Vulkan_Buffer
-    if b, res := vulkan_create_buffer(vulkan.device, &vulkan.physical_device_memory_properties, &index_buffer_create_info, {.DEVICE_LOCAL}); res != .SUCCESS {
-        app_panic("Failed to create index buffer.")
-    } else {
-        index_buffer = b
+    w, h, refresh_rate := app_init()
+    dt := 1.0/f32(refresh_rate)
+
+    vulkan: Vulkan
+    vulkan.arena = mem.arena_allocator(&{data = make([]byte, mem.Megabyte)})
+    if res := vulkan_init(&vulkan); res != .SUCCESS {
+        app_panic("Your graphics driver is out of date.")
     }
 
-    staging_buffer_create_info.size = vertex_buffer_create_info.size + index_buffer_create_info.size
-    staging_buffer: Vulkan_Buffer
-    if b, res := vulkan_create_buffer(vulkan.device, &vulkan.physical_device_memory_properties, &staging_buffer_create_info, {.HOST_VISIBLE, .HOST_COHERENT}); res != .SUCCESS {
-        app_panic("Failed to create staging buffer.")
-    } else {
-        staging_buffer = b
+    if res := vulkan_load_assets(&vulkan); res != .SUCCESS {
+        app_panic("Failed to load assets.")
     }
 
     for app_update() {
