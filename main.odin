@@ -63,6 +63,8 @@ Vulkan :: struct {
     current_frame: int,
 
     vertex_buffer, index_buffer, staging_buffer: Vulkan_Buffer,
+    vertex_buffer_regions: [dynamic]vk.BufferCopy,
+    index_buffer_regions: [dynamic]vk.BufferCopy,
 
     vert_shader_module: vk.ShaderModule,
     frag_shader_module: vk.ShaderModule,
@@ -534,15 +536,31 @@ vulkan_load_assets :: proc(using vulkan: ^Vulkan) -> vk.Result {
     if data, res := cgltf_load("assets/chocolate_donut.glb"); res != .success {
         app_panic("Failed to load assets/chocolate_donut.glb")
     } else {
+        reserve(&vertex_buffer_regions, len(data.buffer_views)/2)
+        reserve(&index_buffer_regions, len(data.buffer_views)/2)
+
+        vertex_buffer_offset := 0
+        index_buffer_offset := 0
+
         for buffer_view in data.buffer_views {
             assert(buffer_view.stride == 0 && buffer_view.data == nil && !buffer_view.has_meshopt_compression && buffer_view.extras.data == nil && buffer_view.extensions_count == 0)
 
             switch buffer_view.type {
                 case .vertices:
                     vertex_buffer_create_info.size += vk.DeviceSize(buffer_view.size)
+                    append(&vertex_buffer_regions, vk.BufferCopy{
+                        srcOffset = vk.DeviceSize(buffer_view.offset),
+                        dstOffset = vk.DeviceSize(vertex_buffer_offset),
+                        size = vk.DeviceSize(buffer_view.size),
+                    })
 
                 case .indices:
                     index_buffer_create_info.size += vk.DeviceSize(buffer_view.size)
+                    append(&index_buffer_regions, vk.BufferCopy{
+                        srcOffset = vk.DeviceSize(buffer_view.offset),
+                        dstOffset = vk.DeviceSize(index_buffer_offset),
+                        size = vk.DeviceSize(buffer_view.size),
+                    })
 
                 case .invalid:
                     app_panic("Invalid buffer view type.")
