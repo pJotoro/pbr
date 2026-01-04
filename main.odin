@@ -498,6 +498,7 @@ main :: proc() {
     }
 
     w, h, refresh_rate := app_init()
+    dt := 1.0/f32(refresh_rate)
 
     vulkan: Vulkan
     vulkan.arena = mem.arena_allocator(&{data = make([]byte, mem.Megabyte)})

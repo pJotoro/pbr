@@ -1,6 +1,7 @@
 # Specify filepatterns you want git to ignore.
 
 build/*
+assets/*
 *.rdbg
 *.sublime-workspace
 challenges.txt
