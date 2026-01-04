@@ -6,6 +6,7 @@ import "core:dynlib"
 import "core:mem"
 import vk "vendor:vulkan"
 import "core:debug/trace"
+import "vendor:cgltf"
 
 VULKAN_DEBUG :: #config(VULKAN_DEBUG, ODIN_DEBUG)
 VULKAN_VALIDATION :: #config(VULKAN_VALIDATION, VULKAN_DEBUG)
@@ -70,15 +71,6 @@ Vulkan :: struct {
 
     staged: bool,
     image_idx: u32,
-}
-
-when VULKAN_DEBUG_UTILS {
-    vulkan_debug_callback :: proc "system" (severity: vk.DebugUtilsMessageSeverityFlagsEXT, types: vk.DebugUtilsMessageTypeFlagsEXT, data: ^vk.DebugUtilsMessengerCallbackDataEXT, user_data: rawptr) -> b32
-    {
-        runtime.print_string(string(data.pMessage))
-        runtime.print_byte('\n')
-        return false
-    }
 }
 
 vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
@@ -439,39 +431,6 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
     return .SUCCESS
 }
 
-when STACK_TRACE {
-    global_trace_ctx: trace.Context
-
-    debug_trace_assertion_failure_proc :: proc(prefix, message: string, loc := #caller_location) -> ! {
-        runtime.print_caller_location(loc)
-        runtime.print_string(" ")
-        runtime.print_string(prefix)
-        if len(message) > 0 {
-            runtime.print_string(": ")
-            runtime.print_string(message)
-        }
-        runtime.print_byte('\n')
-
-        ctx := &global_trace_ctx
-        if !trace.in_resolve(ctx) {
-            buf: [64]trace.Frame
-            runtime.print_string("Debug Trace:\n")
-            frames := trace.frames(ctx, 1, buf[:])
-            for f, i in frames {
-                fl := trace.resolve(ctx, f, context.temp_allocator)
-                if fl.loc.file_path == "" && fl.loc.line == 0 {
-                    continue
-                }
-                runtime.print_caller_location(fl.loc)
-                runtime.print_string(" - frame ")
-                runtime.print_int(i)
-                runtime.print_byte('\n')
-            }
-        }
-        runtime.trap()
-    }
-}
-
 vulkan_update :: proc(using vulkan: ^Vulkan) -> vk.Result {
     vk.WaitForFences(device, 1, &frames[current_frame].fence_in_flight, true, max(u64)) or_return
     vk.ResetFences(device, 1, &frames[current_frame].fence_in_flight) or_return
@@ -511,5 +470,47 @@ main :: proc() {
             app_panic("Unexpected failure occurred.")
         }
         free_all(context.temp_allocator)
+    }
+}
+
+when VULKAN_DEBUG_UTILS {
+    vulkan_debug_callback :: proc "system" (severity: vk.DebugUtilsMessageSeverityFlagsEXT, types: vk.DebugUtilsMessageTypeFlagsEXT, data: ^vk.DebugUtilsMessengerCallbackDataEXT, user_data: rawptr) -> b32
+    {
+        runtime.print_string(string(data.pMessage))
+        runtime.print_byte('\n')
+        return false
+    }
+}
+
+when STACK_TRACE {
+    global_trace_ctx: trace.Context
+
+    debug_trace_assertion_failure_proc :: proc(prefix, message: string, loc := #caller_location) -> ! {
+        runtime.print_caller_location(loc)
+        runtime.print_string(" ")
+        runtime.print_string(prefix)
+        if len(message) > 0 {
+            runtime.print_string(": ")
+            runtime.print_string(message)
+        }
+        runtime.print_byte('\n')
+
+        ctx := &global_trace_ctx
+        if !trace.in_resolve(ctx) {
+            buf: [64]trace.Frame
+            runtime.print_string("Debug Trace:\n")
+            frames := trace.frames(ctx, 1, buf[:])
+            for f, i in frames {
+                fl := trace.resolve(ctx, f, context.temp_allocator)
+                if fl.loc.file_path == "" && fl.loc.line == 0 {
+                    continue
+                }
+                runtime.print_caller_location(fl.loc)
+                runtime.print_string(" - frame ")
+                runtime.print_int(i)
+                runtime.print_byte('\n')
+            }
+        }
+        runtime.trap()
     }
 }
