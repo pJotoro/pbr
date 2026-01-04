@@ -437,6 +437,8 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
 
     vk.CreateSampler(device, &{sType = .SAMPLER_CREATE_INFO}, nil, &default_sampler) or_return
 
+
+
     return .SUCCESS
 }
 
@@ -523,6 +525,16 @@ vulkan_create_buffer :: proc(device: vk.Device, memory_properties: ^vk.PhysicalD
 }
 
 vulkan_load_assets :: proc(using vulkan: ^Vulkan) -> vk.Result {
+    /*
+    Parts of gltf file I don't handle yet that I have to:
+
+    meshes
+    materials
+    accessors
+    nodes
+    extensions    
+    */
+
     vertex_buffer_create_info := vk.BufferCreateInfo {
         sType = .BUFFER_CREATE_INFO,
         usage = {.TRANSFER_DST, .VERTEX_BUFFER},
