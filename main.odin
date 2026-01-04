@@ -66,6 +66,8 @@ Vulkan :: struct {
     vertex_buffer_regions: [dynamic]vk.BufferCopy,
     index_buffer_regions: [dynamic]vk.BufferCopy,
 
+    default_sampler: vk.Sampler,
+
     vert_shader_module: vk.ShaderModule,
     frag_shader_module: vk.ShaderModule,
     shader_stages: [2]vk.PipelineShaderStageCreateInfo,
@@ -73,7 +75,6 @@ Vulkan :: struct {
     render_pass: vk.RenderPass,
     pipeline_layout: vk.PipelineLayout,
     pipeline: vk.Pipeline,
-
 
     staged: bool,
     image_idx: u32,
@@ -433,6 +434,8 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
         vk.CreateSemaphore(device, &{sType = .SEMAPHORE_CREATE_INFO}, nil, &frame.sem_image_available) or_return
         vk.CreateSemaphore(device, &{sType = .SEMAPHORE_CREATE_INFO}, nil, &frame.sem_render_finished) or_return
     }
+
+    vk.CreateSampler(device, &{sType = .SAMPLER_CREATE_INFO}, nil, &default_sampler) or_return
 
     return .SUCCESS
 }
