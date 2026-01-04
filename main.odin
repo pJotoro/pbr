@@ -540,6 +540,10 @@ main :: proc() {
         sType = .BUFFER_CREATE_INFO,
         usage = {.TRANSFER_DST, .INDEX_BUFFER},
     }
+    staging_buffer_create_info := vk.BufferCreateInfo {
+        sType = .BUFFER_CREATE_INFO,
+        usage = {.TRANSFER_SRC},
+    }
 
     if data, res := cgltf_load("assets/chocolate_donut.glb"); res != .success {
         app_panic("Failed to load assets/chocolate_donut.glb")
@@ -564,16 +568,26 @@ main :: proc() {
         }
     }
 
-    vertex_buffer, index_buffer: Vulkan_Buffer
+    vertex_buffer: Vulkan_Buffer
     if b, res := vulkan_create_buffer(vulkan.device, &vulkan.physical_device_memory_properties, &vertex_buffer_create_info, {.DEVICE_LOCAL}); res != .SUCCESS {
         app_panic("Failed to create vertex buffer.")
     } else {
         vertex_buffer = b
     }
+
+    index_buffer: Vulkan_Buffer
     if b, res := vulkan_create_buffer(vulkan.device, &vulkan.physical_device_memory_properties, &index_buffer_create_info, {.DEVICE_LOCAL}); res != .SUCCESS {
         app_panic("Failed to create index buffer.")
     } else {
         index_buffer = b
+    }
+
+    staging_buffer_create_info.size = vertex_buffer_create_info.size + index_buffer_create_info.size
+    staging_buffer: Vulkan_Buffer
+    if b, res := vulkan_create_buffer(vulkan.device, &vulkan.physical_device_memory_properties, &staging_buffer_create_info, {.HOST_VISIBLE, .HOST_COHERENT}); res != .SUCCESS {
+        app_panic("Failed to create staging buffer.")
+    } else {
+        staging_buffer = b
     }
 
     for app_update() {
