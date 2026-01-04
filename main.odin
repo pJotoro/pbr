@@ -62,6 +62,8 @@ Vulkan :: struct {
     frames: []Vulkan_Frame,
     current_frame: int,
 
+    vertex_buffer, index_buffer: vk.Buffer,
+
     vert_shader_module: vk.ShaderModule,
     frag_shader_module: vk.ShaderModule,
     shader_stages: [2]vk.PipelineShaderStageCreateInfo,
@@ -498,11 +500,35 @@ main :: proc() {
         app_panic("Your graphics driver is out of date.")
     }
 
+    vertex_buffer_create_info := vk.BufferCreateInfo {
+        sType = .BUFFER_CREATE_INFO,
+        usage = {.TRANSFER_DST, .VERTEX_BUFFER},
+    }
+    index_buffer_create_info := vk.BufferCreateInfo {
+        sType = .BUFFER_CREATE_INFO,
+        usage = {.TRANSFER_DST, .INDEX_BUFFER},
+    }
+
     if data, res := cgltf_load("assets/chocolate_donut.glb"); res != .success {
         app_panic("Failed to load assets/chocolate_donut.glb")
     } else {
-        fmt.printf("%#v\n", data)
+        for buffer_view in data.buffer_views {
+            assert(buffer_view.stride == 0 && buffer_view.data == nil && !buffer_view.has_meshopt_compression && buffer_view.extras.data == nil && buffer_view.extensions_count == 0)
+
+            switch buffer_view.type {
+                case .vertices:
+                    vertex_buffer_create_info.size += vk.DeviceSize(buffer_view.size)
+
+                case .indices:
+                    index_buffer_create_info.size += vk.DeviceSize(buffer_view.size)
+
+                case .invalid:
+                    app_panic("Invalid buffer view type.")
+            }
+        }
     }
+
+    
 
     for app_update() {
         if res := vulkan_update(&vulkan); res != .SUCCESS {
