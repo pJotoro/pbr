@@ -536,9 +536,6 @@ vulkan_load_assets :: proc(using vulkan: ^Vulkan) -> vk.Result {
     if data, res := cgltf_load("assets/chocolate_donut.glb"); res != .success {
         app_panic("Failed to load assets/chocolate_donut.glb")
     } else {
-        reserve(&vertex_buffer_regions, len(data.buffer_views)/2)
-        reserve(&index_buffer_regions, len(data.buffer_views)/2)
-
         vertex_buffer_offset := 0
         index_buffer_offset := 0
 
