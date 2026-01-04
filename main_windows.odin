@@ -157,8 +157,8 @@ event_proc :: proc "system" (window: win32.HWND, message: win32.UINT, w_param: w
     return result
 }
 
-app_panic :: proc(text: string) {
+app_panic :: proc(text: string, loc := #caller_location) {
     text_wstring := win32.utf8_to_wstring(text)
     win32.MessageBoxExW(ctx.window, text_wstring, nil, win32.MB_OK|win32.MB_ICONERROR|win32.MB_TOPMOST, 0)
-    panic(text)
+    panic(text, loc)
 }

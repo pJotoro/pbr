@@ -485,6 +485,38 @@ cgltf_load :: proc(name: string) -> (out_data: ^cgltf.data, res: cgltf.result) {
     return cgltf.parse(options, raw_data(file_data), len(file_data))
 }
 
+Vulkan_Buffer :: struct {
+    handle: vk.Buffer,
+    memory: vk.DeviceMemory,
+    offset: vk.DeviceSize,
+}
+
+vulkan_create_buffer :: proc(device: vk.Device, memory_properties: ^vk.PhysicalDeviceMemoryProperties, create_info: ^vk.BufferCreateInfo, memory_property_flags: vk.MemoryPropertyFlags) -> (buffer: Vulkan_Buffer, res: vk.Result) {
+    vk.CreateBuffer(device, create_info, nil, &buffer.handle) or_return
+
+    memory_requirements: vk.MemoryRequirements
+    vk.GetBufferMemoryRequirements(device, buffer.handle, &memory_requirements)
+
+    memory_type_idx := -1
+    memory_types := memory_properties.memoryTypes[0:int(memory_properties.memoryTypeCount)]
+    for memory_type, idx in memory_types {
+        if memory_property_flags <= memory_type.propertyFlags {
+            memory_type_idx = idx
+            break
+        }
+    }
+    assert(memory_type_idx != -1)
+
+    allocate_info := vk.MemoryAllocateInfo {
+        sType = .MEMORY_ALLOCATE_INFO,
+        allocationSize = memory_requirements.size,
+        memoryTypeIndex = u32(memory_type_idx),
+    }
+    vk.AllocateMemory(device, &allocate_info, nil, &buffer.memory) or_return
+
+    return
+}
+
 main :: proc() {
     when STACK_TRACE {
         trace.init(&global_trace_ctx)
@@ -526,9 +558,23 @@ main :: proc() {
                     app_panic("Invalid buffer view type.")
             }
         }
+
+        for texture in data.textures {
+
+        }
     }
 
-    
+    vertex_buffer, index_buffer: Vulkan_Buffer
+    if b, res := vulkan_create_buffer(vulkan.device, &vulkan.physical_device_memory_properties, &vertex_buffer_create_info, {.DEVICE_LOCAL}); res != .SUCCESS {
+        app_panic("Failed to create vertex buffer.")
+    } else {
+        vertex_buffer = b
+    }
+    if b, res := vulkan_create_buffer(vulkan.device, &vulkan.physical_device_memory_properties, &index_buffer_create_info, {.DEVICE_LOCAL}); res != .SUCCESS {
+        app_panic("Failed to create index buffer.")
+    } else {
+        index_buffer = b
+    }
 
     for app_update() {
         if res := vulkan_update(&vulkan); res != .SUCCESS {
