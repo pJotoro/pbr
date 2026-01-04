@@ -7,7 +7,10 @@ import "core:mem"
 import vk "vendor:vulkan"
 import "core:debug/trace"
 
-MAX_FRAMES_IN_FLIGHT :: 2
+VULKAN_DEBUG :: #config(VULKAN_DEBUG, ODIN_DEBUG)
+VULKAN_VALIDATION :: #config(VULKAN_VALIDATION, VULKAN_DEBUG)
+VULKAN_DEBUG_UTILS :: #config(VULKAN_DEBUG_UTILS, VULKAN_DEBUG)
+VULKAN_LAYERS :: #config(VULKAN_LAYERS, VULKAN_DEBUG)
 
 Vulkan_Frame :: struct {
     command_buffer: vk.CommandBuffer,
@@ -67,9 +70,7 @@ Vulkan :: struct {
     image_idx: u32,
 }
 
-VULKAN_DEBUG :: #config(VULKAN_DEBUG, ODIN_DEBUG)
-
-when VULKAN_DEBUG {
+when VULKAN_DEBUG_UTILS {
     vulkan_debug_callback :: proc "system" (severity: vk.DebugUtilsMessageSeverityFlagsEXT, types: vk.DebugUtilsMessageTypeFlagsEXT, data: ^vk.DebugUtilsMessengerCallbackDataEXT, user_data: rawptr) -> b32
     {
         runtime.print_string(string(data.pMessage))
@@ -90,26 +91,23 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
         vk.load_proc_addresses_global(vkGetInstanceProcAddr)
     }
 
-    when VULKAN_DEBUG {
+    when VULKAN_LAYERS {
         instance_layers := [?]cstring {
             "VK_LAYER_KHRONOS_validation", 
             "VK_LAYER_LUNARG_monitor",
         }
-
-        instance_extensions := [?]cstring {
-            "VK_EXT_debug_utils", 
-            "VK_EXT_layer_settings",
-
-            "VK_KHR_surface",
-            VK_KHR_platform_surface,
-        }
-    } else {
-        instance_extensions := [?]cstring {
-            "VK_KHR_surface",
-            VK_KHR_platform_surface,
-        }
     }
-    when VULKAN_DEBUG {
+
+    instance_extensions := make([dynamic]cstring, 0, 4, context.temp_allocator)
+    append(&instance_extensions, cstring("VK_KHR_surface"), VK_KHR_platform_surface)
+    when VULKAN_DEBUG_UTILS {
+        append(&instance_extensions, "VK_EXT_debug_utils")
+    }
+    when VULKAN_LAYERS {
+        append(&instance_extensions, "VK_EXT_layer_settings")
+    }
+
+    when VULKAN_LAYERS {
         instance_layer_count: u32
         vk.EnumerateInstanceLayerProperties(&instance_layer_count, nil) or_return
         instance_layer_properties = make([]vk.LayerProperties, instance_layer_count, arena)
@@ -129,7 +127,7 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
         }
     }
 
-    {
+    when VULKAN_LAYERS {
         instance_extension_count: u32
         vk.EnumerateInstanceExtensionProperties(nil, &instance_extension_count, nil) or_return
         for instance_layer in instance_layers {
@@ -151,20 +149,26 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
             vk.EnumerateInstanceExtensionProperties(instance_layer, &count, raw_data(cur_instance_extension_properties)) or_return
             cur_instance_extension_properties = cur_instance_extension_properties[int(count):]
         }
-
-        for extension in instance_extensions {
-            found := false
-            for &props in instance_extension_properties {
-                if extension == cstring(raw_data(props.extensionName[:])) {
-                    found = true
-                    break
-                }
-            }
-            if !found {
-                return .ERROR_EXTENSION_NOT_PRESENT
+    } else {
+        instance_extension_count: u32
+        vk.EnumerateInstanceExtensionProperties(nil, &instance_extension_count, nil) or_return
+        instance_extension_properties = make([]vk.ExtensionProperties, instance_extension_count, arena)
+        vk.EnumerateInstanceExtensionProperties(nil, &instance_extension_count, raw_data(instance_extension_properties)) or_return
+    }
+    
+    for extension in instance_extensions {
+        found := false
+        for &props in instance_extension_properties {
+            if extension == cstring(raw_data(props.extensionName[:])) {
+                found = true
+                break
             }
         }
+        if !found {
+            return .ERROR_EXTENSION_NOT_PRESENT
+        }
     }
+
     {
         app_info := vk.ApplicationInfo {
             sType = .APPLICATION_INFO,
@@ -175,45 +179,50 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
             apiVersion = vk.API_VERSION_1_0,
         }
 
-        when VULKAN_DEBUG {
-            create_info := vk.InstanceCreateInfo {
-                sType = .INSTANCE_CREATE_INFO,
-                pApplicationInfo = &app_info,
-                enabledExtensionCount = u32(len(instance_extensions)),
-                ppEnabledExtensionNames = raw_data(instance_extensions[:]),
+        create_info := vk.InstanceCreateInfo {
+            sType = .INSTANCE_CREATE_INFO,
+            pApplicationInfo = &app_info,
+            enabledExtensionCount = u32(len(instance_extensions)),
+            ppEnabledExtensionNames = raw_data(instance_extensions),
+        }
 
-                enabledLayerCount = u32(len(instance_layers)),
-                ppEnabledLayerNames = raw_data(instance_layers[:]),
-            }
-
+        when VULKAN_DEBUG_UTILS {
             debug_info := vk.DebugUtilsMessengerCreateInfoEXT {
                 sType = .DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
                 messageSeverity = {.VERBOSE, .ERROR, .WARNING, .INFO},
-                messageType = {.GENERAL, .VALIDATION, .PERFORMANCE},
+                messageType = {.GENERAL, .PERFORMANCE},
                 pfnUserCallback = vulkan_debug_callback,
                 pUserData = vulkan,
             }
+            when VULKAN_VALIDATION {
+                debug_info.messageType += {.VALIDATION}
+            }
+        }
 
+        when VULKAN_LAYERS {
+            create_info.enabledLayerCount = u32(len(instance_layers))
+            create_info.ppEnabledLayerNames = raw_data(instance_layers[:])
+        }
+
+        when VULKAN_VALIDATION {
             validation_enabled := [?]vk.ValidationFeatureEnableEXT {
                 .BEST_PRACTICES,
                 .SYNCHRONIZATION_VALIDATION,
             }
-
             validation_info := vk.ValidationFeaturesEXT {
                 sType = .VALIDATION_FEATURES_EXT,
                 enabledValidationFeatureCount = u32(len(validation_enabled)),
                 pEnabledValidationFeatures = raw_data(validation_enabled[:]),
             }
+        }
 
+        when VULKAN_DEBUG_UTILS && VULKAN_VALIDATION {
             create_info.pNext = &debug_info
             debug_info.pNext = &validation_info
-        } else {
-            create_info := vk.InstanceCreateInfo {
-                sType = .INSTANCE_CREATE_INFO,
-                pApplicationInfo = &app_info,
-                enabledExtensionCount = u32(len(instance_extensions)),
-                ppEnabledExtensionNames = raw_data(instance_extensions),
-            }
+        } else when VULKAN_DEBUG_UTILS {
+            create_info.pNext = &debug_info
+        } else when VULKAN_VALIDATION {
+            create_info.pNext = &validation_info
         }
 
         vk.CreateInstance(&create_info, nil, &instance) or_return
