@@ -487,7 +487,8 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
             assert(mesh.extras.data == nil)
             assert(mesh.extensions_count == 0)
 
-            for primitive in mesh.primitives {
+            attributes: [dynamic]vk.VertexInputAttributeDescription
+            for primitive, binding_index in mesh.primitives {
                 assert(primitive.type == .triangles)
                 assert(primitive.indices.component_type == .r_16u)
                 assert(!primitive.indices.normalized)
@@ -503,6 +504,13 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
                 assert(primitive.indices.extensions_count == 0)
                 // primitive.material
                 // primitive.attributes
+                for attribute, attribute_index in primitive.attributes {
+                    append(&attributes, vk.VertexInputAttributeDescription{
+                        location = u32(attribute_index),
+                        binding = u32(binding_index),
+                        //format = 
+                    })
+                }
                 assert(primitive.targets == nil)
                 assert(primitive.extras.data == nil)
                 assert(!primitive.has_draco_mesh_compression)
@@ -557,6 +565,81 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
 
     return .SUCCESS
 }
+
+vulkan_get_format_from_cgltf_component_type_and_cgltf_type :: #force_inline proc "contextless" (cgltf_component_type: cgltf.component_type, cgltf_type: cgltf.type) -> vk.Format {
+    #partial switch cgltf_component_type {
+        case .r_8:
+            #partial switch cgltf_type {
+                case .scalar:
+                    return .R8_SINT
+                case .vec2:
+                    return .R8G8_SINT
+                case .vec3:
+                    return .R8G8B8_SINT
+                case .vec4:
+                    return .R8G8B8A8_SINT
+            }
+        case .r_8u:
+            #partial switch cgltf_type {
+                case .scalar:
+                    return .R8_UINT
+                case .vec2:
+                    return .R8G8_UINT
+                case .vec3:
+                    return .R8G8B8_UINT
+                case .vec4:
+                    return .R8G8B8A8_UINT
+            }
+        case .r_16:
+            #partial switch cgltf_type {
+                case .scalar:
+                    return .R16_SINT
+                case .vec2:
+                    return .R16G16_SINT
+                case .vec3:
+                    return .R16G16B16_SINT
+                case .vec4:
+                    return .R16G16B16A16_SINT
+            }
+        case .r_16u:
+            #partial switch cgltf_type {
+                case .scalar:
+                    return .R16_UINT
+                case .vec2:
+                    return .R16G16_UINT
+                case .vec3:
+                    return .R16G16B16_UINT
+                case .vec4:
+                    return .R16G16B16A16_UINT
+            }
+        case .r_32u:
+            #partial switch cgltf_type {
+                case .scalar:
+                    return .R32_UINT
+                case .vec2:
+                    return .R32G32_UINT
+                case .vec3:
+                    return .R32G32B32_UINT
+                case .vec4:
+                    return .R32G32B32A32_UINT
+            }
+        case .r_32f:
+            #partial switch cgltf_type {
+                case .scalar:
+                    return .R32_SFLOAT
+                case .vec2:
+                    return .R32G32_SFLOAT
+                case .vec3:
+                    return .R32G32B32_SFLOAT
+                case .vec4:
+                    return .R32G32B32A32_SFLOAT
+            }
+    }
+
+    return .UNDEFINED
+}
+
+vulkan_get_format :: proc{vulkan_get_format_from_cgltf_component_type_and_cgltf_type}
 
 vulkan_update :: proc(using vulkan: ^Vulkan) -> vk.Result {
     vk.WaitForFences(device, 1, &frames[current_frame].fence_in_flight, true, max(u64)) or_return
