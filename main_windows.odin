@@ -122,10 +122,6 @@ vulkan_create_surface :: proc(vulkan: ^Vulkan) -> (surface: vk.SurfaceKHR, res: 
 }
 
 app_show :: proc() {
-    @static already_shown := false
-    assert(!already_shown)
-    already_shown = true
-
     win32.ShowWindow(ctx.window, win32.SW_SHOW)
 }
 

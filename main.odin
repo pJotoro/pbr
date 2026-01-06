@@ -7,13 +7,14 @@ import "core:mem"
 import vk "vendor:vulkan"
 import "core:debug/trace"
 // import "vendor:cgltf"
-import "core:os"
-import "core:fmt"
+// import "core:os"
+// import "core:fmt"
 
 VULKAN_DEBUG :: #config(VULKAN_DEBUG, ODIN_DEBUG)
 VULKAN_VALIDATION :: #config(VULKAN_VALIDATION, VULKAN_DEBUG)
 VULKAN_DEBUG_UTILS :: #config(VULKAN_DEBUG_UTILS, VULKAN_DEBUG)
 VULKAN_LAYERS :: #config(VULKAN_LAYERS, VULKAN_DEBUG)
+VULKAN_DISABLE_PIPELINE_OPTIMIZATION :: #config(VULKAN_DISABLE_PIPELINE_OPTIMIZATION, VULKAN_DEBUG)
 
 STACK_TRACE :: #config(STACK_TRACE, ODIN_DEBUG)
 
@@ -55,12 +56,12 @@ Vulkan :: struct {
     swapchain_image_views: []vk.ImageView,
     swapchain_format: vk.SurfaceFormatKHR,
     swapchain_extent: vk.Extent2D,
-    swapchain_frame_buffers: []vk.Framebuffer,
+    swapchain_framebuffers: []vk.Framebuffer,
 
     command_pool: vk.CommandPool,
 
     frames: []Vulkan_Frame,
-    current_frame: int,
+    frame_idx: int,
 
     vertex_buffer, index_buffer, staging_buffer: Vulkan_Buffer,
     vertex_buffer_regions: [dynamic]vk.BufferCopy,
@@ -74,6 +75,7 @@ Vulkan :: struct {
 
     render_pass: vk.RenderPass,
     pipeline_layout: vk.PipelineLayout,
+    pipeline_cache: vk.PipelineCache,
     pipeline: vk.Pipeline,
 
     staged: bool,
@@ -305,7 +307,7 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
     physical_device_features.inheritedQueries = false
 
     {
-        count: u32;
+        count: u32
         vk.GetPhysicalDeviceQueueFamilyProperties(physical_device, &count, nil)
         queue_family_properties = make([]vk.QueueFamilyProperties, count, arena)
         vk.GetPhysicalDeviceQueueFamilyProperties(physical_device, &count, raw_data(queue_family_properties))
@@ -394,10 +396,10 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
     }
 
     swapchain_image_views = make([]vk.ImageView, len(swapchain_images), arena)
-    for &swapchain_image_view, i in swapchain_image_views {
+    for &swapchain_image_view, idx in swapchain_image_views {
         vk.CreateImageView(device, &{
             sType = .IMAGE_VIEW_CREATE_INFO,
-            image = swapchain_images[i],
+            image = swapchain_images[idx],
             viewType = .D2,
             format = swapchain_format.format,
             subresourceRange = {
@@ -422,8 +424,8 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
         device, 
         &{ sType = .COMMAND_BUFFER_ALLOCATE_INFO, commandPool = command_pool, commandBufferCount = u32(len(frames))}, 
         raw_data(command_buffers)) or_return
-    for &frame, i in frames {
-        frame.command_buffer = command_buffers[i]
+    for &frame, idx in frames {
+        frame.command_buffer = command_buffers[idx]
     }
 
     for &frame in frames {
@@ -437,6 +439,174 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
 
     vk.CreateSampler(device, &{sType = .SAMPLER_CREATE_INFO}, nil, &default_sampler) or_return
 
+    vk.CreatePipelineLayout(device, &{sType = .PIPELINE_LAYOUT_CREATE_INFO}, nil, &pipeline_layout) or_return
+    vk.CreatePipelineCache(device, &{sType = .PIPELINE_CACHE_CREATE_INFO}, nil, &pipeline_cache) or_return
+
+    {
+        color_attachment := vk.AttachmentDescription {
+            format = swapchain_format.format,
+            samples = {._1},
+            loadOp = .CLEAR,
+            storeOp = .STORE,
+            stencilLoadOp = .DONT_CARE,
+            stencilStoreOp = .DONT_CARE,
+            initialLayout = .UNDEFINED,
+            finalLayout = .PRESENT_SRC_KHR,
+        }
+
+        color_attachment_ref := vk.AttachmentReference {
+            attachment = 0,
+            layout = .COLOR_ATTACHMENT_OPTIMAL,
+        }
+
+        subpass := vk.SubpassDescription {
+            pipelineBindPoint = .GRAPHICS,
+            colorAttachmentCount = 1,
+            pColorAttachments = &color_attachment_ref,
+        }
+
+        subpass_dependency := vk.SubpassDependency {
+            srcSubpass = vk.SUBPASS_EXTERNAL,
+            dstSubpass = 0,
+            srcStageMask = {.COLOR_ATTACHMENT_OUTPUT},
+            dstStageMask = {.COLOR_ATTACHMENT_OUTPUT},
+            srcAccessMask = {},
+            dstAccessMask = {.COLOR_ATTACHMENT_WRITE},
+        }
+
+        attachments := [?]vk.AttachmentDescription { 
+            color_attachment,
+        }
+
+        info := vk.RenderPassCreateInfo {
+            sType = .RENDER_PASS_CREATE_INFO,
+            attachmentCount = u32(len(attachments)),
+            pAttachments = raw_data(attachments[:]),
+            subpassCount = 1,
+            pSubpasses = &subpass,
+            dependencyCount = 1,
+            pDependencies = &subpass_dependency,
+        }
+
+        vk.CreateRenderPass(device, &info, nil, &render_pass) or_return
+    }
+
+    swapchain_framebuffers = make([]vk.Framebuffer, len(swapchain_images), arena)
+    for idx in 0..<len(swapchain_images) {
+        attachments := [?]vk.ImageView {
+            swapchain_image_views[idx],
+        }
+
+        info := vk.FramebufferCreateInfo {
+            sType = .FRAMEBUFFER_CREATE_INFO,
+            renderPass = render_pass,
+            attachmentCount = u32(len(attachments)),
+            pAttachments = raw_data(attachments[:]),
+            width = swapchain_extent.width,
+            height = swapchain_extent.height,
+            layers = 1,
+        }
+        vk.CreateFramebuffer(device, &info, nil, &swapchain_framebuffers[i]) or_return
+    }
+
+    {
+        dynamic_state_info := vk.PipelineDynamicStateCreateInfo {
+            sType = .PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        }
+        input_assembly_info := vk.PipelineInputAssemblyStateCreateInfo {
+            sType = .PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+            topology = .TRIANGLE_LIST,
+        }
+        viewport := vk.Viewport {
+            width = f32(swapchain_extent.width),
+            height = f32(swapchain_extent.height),
+            maxDepth = 1.0,
+        }
+        scissor := vk.Rect2D {
+            extent = swapchain_extent,
+        }
+        viewport_info := vk.PipelineViewportStateCreateInfo {
+            sType = .PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+            viewportCount = 1,
+            pViewports = &viewport,
+            scissorCount = 1,
+            pScissors = &scissor,
+        }
+        rasterization_info := vk.PipelineRasterizationStateCreateInfo {
+            sType = .PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+            cullMode = {.BACK},
+            frontFace = .COUNTER_CLOCKWISE,
+            lineWidth = 1.0,
+        }
+        multisample_info := vk.PipelineMultisampleStateCreateInfo {
+            sType = .PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+            rasterizationSamples = {._1},
+        }
+        blend_attachment_info := vk.PipelineColorBlendAttachmentState {
+
+        }
+        blend_info := vk.PipelineColorBlendStateCreateInfo {
+            sType = .PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+            attachmentCount = 1,
+            pAttachments = &blend_attachment_info,
+        }
+
+        graphics_pipeline_info := vk.GraphicsPipelineCreateInfo {
+            sType = .GRAPHICS_PIPELINE_CREATE_INFO,
+            flags = {},
+            pInputAssemblyState = &input_assembly_info,
+            pViewportState = &viewport_info,
+            pRasterizationState = &rasterization_info,
+            pMultisampleState = &multisample_info,
+            pColorBlendState = &blend_info,
+            pDynamicState = &dynamic_state_info,
+            layout = pipeline_layout,
+            renderPass = render_pass,
+        }
+        when VULKAN_DISABLE_PIPELINE_OPTIMIZATION {
+            graphics_pipeline_info.flags += {.DISABLE_OPTIMIZATION}
+        }
+
+        vert := vulkan_create_shader_stage(device, "shader.vert", .VERTEX) or_return
+        defer vulkan_destroy_shader_stage(device, vert)
+        frag := vulkan_create_shader_stage(device, "shader.frag", .FRAGMENT) or_return
+        defer vulkan_destroy_shader_stage(device, frag)
+
+        shader_stages := []vk.PipelineShaderStageCreateInfo {
+            vert,
+            frag,
+        }
+        vertex_input_bindings := [?]vk.VertexInputBindingDescription {
+            {
+                binding = 0,
+                stride = 0, // TODO
+                inputRate = .INSTANCE,
+            },
+        }
+        vertex_attributes := [?]vk.VertexInputAttributeDescription {
+            {
+                location = 0,
+                binding = 0,
+                format = .R32G32_SINT, // TODO
+                offset = 0, // TODO
+            },
+        }
+        vertex_input_info := vk.PipelineVertexInputStateCreateInfo {
+            sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+            vertexBindingDescriptionCount = u32(len(vertex_input_bindings)),
+            pVertexBindingDescriptions = raw_data(vertex_input_bindings[:]),
+            vertexAttributeDescriptionCount = u32(len(vertex_attributes)),
+            pVertexAttributeDescriptions = raw_data(vertex_attributes[:]),
+        }
+
+        graphics_pipeline_info.stageCount = u32(len(shader_stages))
+        graphics_pipeline_info.pStages = raw_data(shader_stages[:])
+        graphics_pipeline_info.pVertexInputState = &vertex_input_info
+
+        vk.CreateGraphicsPipelines(device, pipeline_cache, 1, &graphics_pipeline_info, nil, &pipeline) or_return
+    }
+
+        
     /*
     Parts of gltf file I don't handle yet that I have to:
 
@@ -447,18 +617,18 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
     extensions    
     */
 
-    vertex_buffer_create_info := vk.BufferCreateInfo {
-        sType = .BUFFER_CREATE_INFO,
-        usage = {.TRANSFER_DST, .VERTEX_BUFFER},
-    }
-    index_buffer_create_info := vk.BufferCreateInfo {
-        sType = .BUFFER_CREATE_INFO,
-        usage = {.TRANSFER_DST, .INDEX_BUFFER},
-    }
-    staging_buffer_create_info := vk.BufferCreateInfo {
-        sType = .BUFFER_CREATE_INFO,
-        usage = {.TRANSFER_SRC},
-    }
+    // vertex_buffer_create_info := vk.BufferCreateInfo {
+    //     sType = .BUFFER_CREATE_INFO,
+    //     usage = {.TRANSFER_DST, .VERTEX_BUFFER},
+    // }
+    // index_buffer_create_info := vk.BufferCreateInfo {
+    //     sType = .BUFFER_CREATE_INFO,
+    //     usage = {.TRANSFER_DST, .INDEX_BUFFER},
+    // }
+    // staging_buffer_create_info := vk.BufferCreateInfo {
+    //     sType = .BUFFER_CREATE_INFO,
+    //     usage = {.TRANSFER_SRC},
+    // }
 
 
     // if data, res := cgltf_load("assets/chocolate_donut.glb"); res != .success {
@@ -641,21 +811,75 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
 
 // vulkan_get_format :: proc{vulkan_get_format_from_cgltf_component_type_and_cgltf_type}
 
-vulkan_update :: proc(using vulkan: ^Vulkan) -> vk.Result {
-    vk.WaitForFences(device, 1, &frames[current_frame].fence_in_flight, true, max(u64)) or_return
-    vk.ResetFences(device, 1, &frames[current_frame].fence_in_flight) or_return
+vulkan_begin_rendering :: proc(using vulkan: ^Vulkan) -> (cb: vk.CommandBuffer, res: vk.Result) {
+    vk.WaitForFences(device, 1, &frames[frame_idx].fence_in_flight, true, max(u64)) or_return
+    vk.ResetFences(device, 1, &frames[frame_idx].fence_in_flight) or_return
 
-    vk.AcquireNextImageKHR(device, swapchain, max(u64), frames[current_frame].sem_image_available, vk.Fence{}, &image_idx) or_return
-    if (image_idx == 0 && staged) 
-    {
-        app_show()
+    vk.AcquireNextImageKHR(device, swapchain, max(u64), frames[frame_idx].sem_image_available, vk.Fence{}, &image_idx) or_return
+
+    if image_idx == 0 {
+        @static app_ready := -1
+        if app_ready == -1 {
+            app_ready += 1
+        } else if app_ready == 0 {
+            app_ready += 1
+            app_show()
+        }
     }
 
-    cb := frames[current_frame].command_buffer
+    cb = frames[frame_idx].command_buffer
     vk.BeginCommandBuffer(cb, &{
         sType = .COMMAND_BUFFER_BEGIN_INFO,
         flags = {.ONE_TIME_SUBMIT},
     }) or_return
+
+    clear_value := vk.ClearValue {
+        color = {
+            float32 = {0.0, 0.0, 0.0, 0.0},
+        },
+    }
+    info := vk.RenderPassBeginInfo {
+        sType = .RENDER_PASS_BEGIN_INFO,
+        renderPass = render_pass,
+        framebuffer = swapchain_framebuffers[int(image_idx)],
+        renderArea = { extent = swapchain_extent },
+        clearValueCount = 1,
+        pClearValues = &clear_value,
+    };
+    vk.CmdBeginRenderPass(cb, &info, .INLINE)
+
+    return
+}
+
+vulkan_end_rendering :: proc(using vulkan: ^Vulkan) -> vk.Result {
+    cb := frames[int(frame_idx)].command_buffer
+    vk.CmdEndRenderPass(cb)
+    vk.EndCommandBuffer(cb) or_return
+
+    wait_stage := vk.PipelineStageFlags{.COLOR_ATTACHMENT_OUTPUT}
+    submit_info := vk.SubmitInfo {
+        sType = .SUBMIT_INFO,
+        waitSemaphoreCount = 1,
+        pWaitSemaphores = &frames[frame_idx].sem_image_available,
+        pWaitDstStageMask = &wait_stage,
+        commandBufferCount = 1,
+        pCommandBuffers = &cb,
+        signalSemaphoreCount = 1,
+        pSignalSemaphores = &frames[frame_idx].sem_render_finished,
+    }
+    vk.QueueSubmit(graphics_queue, 1, &submit_info, frames[frame_idx].fence_in_flight) or_return
+
+    present_info := vk.PresentInfoKHR {
+        sType = .PRESENT_INFO_KHR,
+        waitSemaphoreCount = 1,
+        pWaitSemaphores = &frames[frame_idx].sem_render_finished,
+        swapchainCount = 1,
+        pSwapchains = &swapchain,
+        pImageIndices = &image_idx,
+    }
+    vk.QueuePresentKHR(graphics_queue, &present_info) or_return
+
+    frame_idx = (frame_idx + 1) % len(frames)
 
     return .SUCCESS
 }
@@ -739,11 +963,42 @@ main :: proc() {
     }
 
     for app_update() {
-        if res := vulkan_update(&vulkan); res != .SUCCESS {
+        cb: vk.CommandBuffer
+        if command_buffer, res := vulkan_begin_rendering(&vulkan); res != .SUCCESS {
+            app_panic("Unexpected failure occurred.")
+        } else {
+            cb = command_buffer
+        }
+
+
+
+        if res := vulkan_end_rendering(&vulkan); res != .SUCCESS {
             app_panic("Unexpected failure occurred.")
         }
+
         free_all(context.temp_allocator)
     }
+}
+
+vulkan_create_shader_stage :: proc(device: vk.Device, $path: string, stage: vk.ShaderStageFlag) -> (shader_stage: vk.PipelineShaderStageCreateInfo, res: vk.Result) {
+    shader_stage.sType = .PIPELINE_SHADER_STAGE_CREATE_INFO
+    shader_stage.stage = {stage}
+    shader_stage.pName = "main"
+
+    file_data := #load(path, []u32)
+
+    info := vk.ShaderModuleCreateInfo { 
+        sType = .SHADER_MODULE_CREATE_INFO,
+        codeSize = len(file_data),
+        pCode = raw_data(file_data),
+    }
+    vk.CreateShaderModule(device, &info, nil, &shader_stage.module) or_return
+
+    return
+}
+
+vulkan_destroy_shader_stage :: proc(device: vk.Device, shader_stage: vk.PipelineShaderStageCreateInfo) {
+    vk.DestroyShaderModule(device, shader_stage.module, nil)
 }
 
 when VULKAN_DEBUG_UTILS {
