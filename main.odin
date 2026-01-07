@@ -713,13 +713,13 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
     return .SUCCESS
 }
 
-vulkan_create_graphics_pipeline_with_defaults :: proc(using vulkan: ^Vulkan, shader_stages: []vk.PipelineShaderStageCreateInfo, vertex_input: ^vk.PipelineVertexInputStateCreateInfo) -> (pipeline: vk.Pipeline, res: vk.Result) {
-    pipeline_info := default_pipeline_info
+vulkan_create_graphics_pipeline_with_defaults :: proc(ctx: ^Vulkan, shader_stages: []vk.PipelineShaderStageCreateInfo, vertex_input: ^vk.PipelineVertexInputStateCreateInfo) -> (pipeline: vk.Pipeline, res: vk.Result) {
+    pipeline_info := ctx.default_pipeline_info
     pipeline_info.stageCount = u32(len(shader_stages))
     pipeline_info.pStages = raw_data(shader_stages)
     pipeline_info.pVertexInputState = vertex_input
 
-    res = vk.CreateGraphicsPipelines(device, default_pipeline_cache, 1, &pipeline_info, nil, &pipeline)
+    res = vk.CreateGraphicsPipelines(ctx.device, ctx.default_pipeline_cache, 1, &pipeline_info, nil, &pipeline)
     return
 }
 
@@ -802,13 +802,13 @@ vulkan_create_graphics_pipeline :: proc {vulkan_create_graphics_pipeline_with_de
 
 // vulkan_get_format :: proc{vulkan_get_format_from_cgltf_component_type_and_cgltf_type}
 
-vulkan_begin_frame :: proc(using vulkan: ^Vulkan) -> (cb: vk.CommandBuffer, res: vk.Result) {
-    vk.WaitForFences(device, 1, &frames[frame_idx].fence_in_flight, true, max(u64)) or_return
-    vk.ResetFences(device, 1, &frames[frame_idx].fence_in_flight) or_return
+vulkan_begin_frame :: proc(ctx: ^Vulkan) -> (cb: vk.CommandBuffer, res: vk.Result) {
+    vk.WaitForFences(ctx.device, 1, &ctx.frames[ctx.frame_idx].fence_in_flight, true, max(u64)) or_return
+    vk.ResetFences(ctx.device, 1, &ctx.frames[ctx.frame_idx].fence_in_flight) or_return
 
-    vk.AcquireNextImageKHR(device, swapchain, max(u64), frames[frame_idx].sem_image_available, vk.Fence{}, &image_idx) or_return
+    vk.AcquireNextImageKHR(ctx.device, ctx.swapchain, max(u64), ctx.frames[ctx.frame_idx].sem_image_available, vk.Fence{}, &ctx.image_idx) or_return
 
-    if image_idx == 0 {
+    if ctx.image_idx == 0 {
         @static app_ready := -1
         if app_ready == -1 {
             app_ready += 1
@@ -818,7 +818,7 @@ vulkan_begin_frame :: proc(using vulkan: ^Vulkan) -> (cb: vk.CommandBuffer, res:
         }
     }
 
-    cb = frames[frame_idx].command_buffer
+    cb = ctx.frames[ctx.frame_idx].command_buffer
     vk.BeginCommandBuffer(cb, &{
         sType = .COMMAND_BUFFER_BEGIN_INFO,
         flags = {.ONE_TIME_SUBMIT},
@@ -827,34 +827,34 @@ vulkan_begin_frame :: proc(using vulkan: ^Vulkan) -> (cb: vk.CommandBuffer, res:
     return
 }
 
-vulkan_end_frame :: proc(using vulkan: ^Vulkan) -> vk.Result {
-    cb := frames[frame_idx].command_buffer
+vulkan_end_frame :: proc(ctx: ^Vulkan) -> vk.Result {
+    cb := ctx.frames[ctx.frame_idx].command_buffer
     vk.EndCommandBuffer(cb) or_return
 
     wait_stage := vk.PipelineStageFlags{.COLOR_ATTACHMENT_OUTPUT}
     submit_info := vk.SubmitInfo {
         sType = .SUBMIT_INFO,
         waitSemaphoreCount = 1,
-        pWaitSemaphores = &frames[frame_idx].sem_image_available,
+        pWaitSemaphores = &ctx.frames[ctx.frame_idx].sem_image_available,
         pWaitDstStageMask = &wait_stage,
         commandBufferCount = 1,
         pCommandBuffers = &cb,
         signalSemaphoreCount = 1,
-        pSignalSemaphores = &frames[frame_idx].sem_render_finished,
+        pSignalSemaphores = &ctx.frames[ctx.frame_idx].sem_render_finished,
     }
-    vk.QueueSubmit(graphics_queue, 1, &submit_info, frames[frame_idx].fence_in_flight) or_return
+    vk.QueueSubmit(ctx.graphics_queue, 1, &submit_info, ctx.frames[ctx.frame_idx].fence_in_flight) or_return
 
     present_info := vk.PresentInfoKHR {
         sType = .PRESENT_INFO_KHR,
         waitSemaphoreCount = 1,
-        pWaitSemaphores = &frames[frame_idx].sem_render_finished,
+        pWaitSemaphores = &ctx.frames[ctx.frame_idx].sem_render_finished,
         swapchainCount = 1,
-        pSwapchains = &swapchain,
-        pImageIndices = &image_idx,
+        pSwapchains = &ctx.swapchain,
+        pImageIndices = &ctx.image_idx,
     }
-    vk.QueuePresentKHR(graphics_queue, &present_info) or_return
+    vk.QueuePresentKHR(ctx.graphics_queue, &present_info) or_return
 
-    frame_idx = (frame_idx + 1) % len(frames)
+    ctx.frame_idx = (ctx.frame_idx + 1) % len(ctx.frames)
 
     return .SUCCESS
 }
