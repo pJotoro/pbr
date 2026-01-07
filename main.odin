@@ -126,12 +126,12 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
     when VULKAN_LAYERS {
         instance_layer_count: u32
         vk.EnumerateInstanceLayerProperties(&instance_layer_count, nil) or_return
-        instance_layer_properties = make([]vk.LayerProperties, instance_layer_count, arena)
-        vk.EnumerateInstanceLayerProperties(&instance_layer_count, raw_data(instance_layer_properties)) or_return
+        ctx.instance_layer_properties = make([]vk.LayerProperties, instance_layer_count, ctx.arena)
+        vk.EnumerateInstanceLayerProperties(&instance_layer_count, raw_data(ctx.instance_layer_properties)) or_return
 
         for layer in instance_layers {
             found := false
-            for &props in instance_layer_properties {
+            for &props in ctx.instance_layer_properties {
                 if layer == cstring(raw_data(props.layerName[:])) {
                     found = true
                     break
@@ -152,9 +152,9 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
             instance_extension_count += count
 
         }
-        instance_extension_properties = make([]vk.ExtensionProperties, instance_extension_count, arena)
+        ctx.instance_extension_properties = make([]vk.ExtensionProperties, instance_extension_count, ctx.arena)
         
-        cur_instance_extension_properties := instance_extension_properties
+        cur_instance_extension_properties := ctx.instance_extension_properties
         {
             count := u32(len(cur_instance_extension_properties))
             vk.EnumerateInstanceExtensionProperties(nil, &count, raw_data(cur_instance_extension_properties)) or_return
@@ -208,7 +208,7 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
                 messageSeverity = {.VERBOSE, .ERROR, .WARNING, .INFO},
                 messageType = {.GENERAL, .PERFORMANCE},
                 pfnUserCallback = vulkan_debug_callback,
-                pUserData = vulkan,
+                pUserData = ctx,
             }
             when VULKAN_VALIDATION {
                 debug_info.messageType += {.VALIDATION}
@@ -581,7 +581,7 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
         renderPass = ctx.render_pass,
     }
     when VULKAN_DISABLE_PIPELINE_OPTIMIZATION {
-        default_pipeline_info.flags += {.DISABLE_OPTIMIZATION}
+        ctx.default_pipeline_info.flags += {.DISABLE_OPTIMIZATION}
     }
         
     /*
