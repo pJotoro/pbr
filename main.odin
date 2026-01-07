@@ -545,6 +545,7 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
 
     ctx.default_rasterization_info = vk.PipelineRasterizationStateCreateInfo {
         sType = .PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        polygonMode = .FILL,
         cullMode = {.BACK},
         frontFace = .COUNTER_CLOCKWISE,
         lineWidth = 1.0,
@@ -556,7 +557,7 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
     }
 
     ctx.default_color_blend_attachment_info = vk.PipelineColorBlendAttachmentState {
-
+        colorWriteMask = {.R, .G, .B, .A},
     }
     ctx.default_color_blend_info = vk.PipelineColorBlendStateCreateInfo {
         sType = .PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
@@ -936,7 +937,6 @@ main :: proc() {
     if res := vulkan_init(&vulkan); res != .SUCCESS {
         app_panic("Your graphics driver is out of date.")
     }
-
 
     vert: vk.PipelineShaderStageCreateInfo
     if s, res := vulkan_create_shader_stage(vulkan.device, "build/debug/shader_vert.spv", .VERTEX); res != .SUCCESS {
