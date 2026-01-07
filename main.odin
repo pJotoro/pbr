@@ -442,6 +442,7 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
     vk.CreatePipelineLayout(device, &{sType = .PIPELINE_LAYOUT_CREATE_INFO}, nil, &pipeline_layout) or_return
     vk.CreatePipelineCache(device, &{sType = .PIPELINE_CACHE_CREATE_INFO}, nil, &pipeline_cache) or_return
 
+    // TODO: Should we create graphics pipelines in a separate procedure?
     {
         color_attachment := vk.AttachmentDescription {
             format = swapchain_format.format,
@@ -567,9 +568,9 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
             graphics_pipeline_info.flags += {.DISABLE_OPTIMIZATION}
         }
 
-        vert := vulkan_create_shader_stage(device, "shader.vert", .VERTEX) or_return
+        vert := vulkan_create_shader_stage(device, "build/debug/shader_vert.spv", .VERTEX) or_return
         defer vulkan_destroy_shader_stage(device, vert)
-        frag := vulkan_create_shader_stage(device, "shader.frag", .FRAGMENT) or_return
+        frag := vulkan_create_shader_stage(device, "build/debug/shader_frag.spv", .FRAGMENT) or_return
         defer vulkan_destroy_shader_stage(device, frag)
 
         shader_stages := []vk.PipelineShaderStageCreateInfo {
@@ -837,7 +838,7 @@ vulkan_begin_rendering_commands :: proc(using vulkan: ^Vulkan) -> (cb: vk.Comman
 }
 
 vulkan_end_rendering_commands :: proc(using vulkan: ^Vulkan) -> vk.Result {
-    cb := frames[int(frame_idx)].command_buffer
+    cb := frames[frame_idx].command_buffer
     vk.EndCommandBuffer(cb) or_return
 
     wait_stage := vk.PipelineStageFlags{.COLOR_ATTACHMENT_OUTPUT}
@@ -967,6 +968,10 @@ main :: proc() {
             },
         }, .INLINE)
 
+        vk.CmdBindPipeline(cb, .GRAPHICS, vulkan.pipeline)
+        vk.CmdDraw(commandBuffer = cb,
+            vertexCount = 6, instanceCount = 0,
+            firstVertex = 0, firstInstance = 0)
 
         vk.CmdEndRenderPass(cb)
 
@@ -987,7 +992,7 @@ vulkan_create_shader_stage :: proc(device: vk.Device, $path: string, stage: vk.S
 
     info := vk.ShaderModuleCreateInfo { 
         sType = .SHADER_MODULE_CREATE_INFO,
-        codeSize = len(file_data),
+        codeSize = len(file_data)*size_of(u32),
         pCode = raw_data(file_data),
     }
     vk.CreateShaderModule(device, &info, nil, &shader_stage.module) or_return

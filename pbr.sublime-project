@@ -25,6 +25,18 @@
 			"name": "release",
 			"cmd": "odin build . -out:build/release/pbr.exe -subsystem:windows -target-features:avx2 -disable-assert -no-bounds-check -no-crt -o:aggressive",
 			"file_regex":  "^(.+)\\(([0-9]+):([0-9]+)\\) (.+)$",
-		}
+		},
+		{
+			"name": "shader_debug",
+			"cmd": "glslang -V --target-env vulkan1.0 -C -Od -gVS $file -o build/debug/${file_base_name}_${file_extension}.spv",
+			"file_regex": "^(?:ERROR|WARNING):\\s+(.+?):(\\d+):",
+			"file_patterns": ["*.vert", "*.frag"]
+		},
+		{
+			"name": "shader_release",
+			"cmd": "glslang -V --target-env vulkan1.0 -C $file -o build/release/${file_base_name}_${file_extension}.spv",
+			"file_regex": "^(?:ERROR|WARNING):\\s+(.+?):(\\d+):",
+			"file_patterns": ["*.vert", "*.frag"],
+		},
 	],
 }
