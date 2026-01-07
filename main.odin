@@ -95,15 +95,15 @@ Vulkan :: struct {
     image_idx: u32,
 }
 
-vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
+vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
     {
         did_load: bool
-        if ctx.lib, did_load = dynlib.load_library(VULKAN_LIB_NAME); !did_load {
+        if lib, did_load = dynlib.load_library(VULKAN_LIB_NAME); !did_load {
             return .ERROR_INCOMPATIBLE_DRIVER 
         }
     }
     {
-        vkGetInstanceProcAddr := dynlib.symbol_address(ctx.lib, "vkGetInstanceProcAddr")
+        vkGetInstanceProcAddr := dynlib.symbol_address(lib, "vkGetInstanceProcAddr")
         vk.load_proc_addresses_global(vkGetInstanceProcAddr)
     }
 
@@ -126,12 +126,12 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
     when VULKAN_LAYERS {
         instance_layer_count: u32
         vk.EnumerateInstanceLayerProperties(&instance_layer_count, nil) or_return
-        ctx.instance_layer_properties = make([]vk.LayerProperties, instance_layer_count, ctx.arena)
-        vk.EnumerateInstanceLayerProperties(&instance_layer_count, raw_data(ctx.instance_layer_properties)) or_return
+        instance_layer_properties = make([]vk.LayerProperties, instance_layer_count, arena)
+        vk.EnumerateInstanceLayerProperties(&instance_layer_count, raw_data(instance_layer_properties)) or_return
 
         for layer in instance_layers {
             found := false
-            for &props in ctx.instance_layer_properties {
+            for &props in instance_layer_properties {
                 if layer == cstring(raw_data(props.layerName[:])) {
                     found = true
                     break
@@ -152,9 +152,9 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
             instance_extension_count += count
 
         }
-        ctx.instance_extension_properties = make([]vk.ExtensionProperties, instance_extension_count, ctx.arena)
+        instance_extension_properties = make([]vk.ExtensionProperties, instance_extension_count, arena)
         
-        cur_instance_extension_properties := ctx.instance_extension_properties
+        cur_instance_extension_properties := instance_extension_properties
         {
             count := u32(len(cur_instance_extension_properties))
             vk.EnumerateInstanceExtensionProperties(nil, &count, raw_data(cur_instance_extension_properties)) or_return
@@ -168,13 +168,13 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
     } else {
         instance_extension_count: u32
         vk.EnumerateInstanceExtensionProperties(nil, &instance_extension_count, nil) or_return
-        ctx.instance_extension_properties = make([]vk.ExtensionProperties, instance_extension_count, ctx.arena)
-        vk.EnumerateInstanceExtensionProperties(nil, &instance_extension_count, raw_data(ctx.instance_extension_properties)) or_return
+        instance_extension_properties = make([]vk.ExtensionProperties, instance_extension_count, arena)
+        vk.EnumerateInstanceExtensionProperties(nil, &instance_extension_count, raw_data(instance_extension_properties)) or_return
     }
 
     for extension in instance_extensions {
         found := false
-        for &props in ctx.instance_extension_properties {
+        for &props in instance_extension_properties {
             if extension == cstring(raw_data(props.extensionName[:])) {
                 found = true
                 break
@@ -208,7 +208,7 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
                 messageSeverity = {.VERBOSE, .ERROR, .WARNING, .INFO},
                 messageType = {.GENERAL, .PERFORMANCE},
                 pfnUserCallback = vulkan_debug_callback,
-                pUserData = ctx,
+                pUserData = vulkan,
             }
             when VULKAN_VALIDATION {
                 debug_info.messageType += {.VALIDATION}
@@ -241,98 +241,98 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
             create_info.pNext = &validation_info
         }
 
-        vk.CreateInstance(&create_info, nil, &ctx.instance) or_return
-        vk.load_proc_addresses_instance(ctx.instance)
+        vk.CreateInstance(&create_info, nil, &instance) or_return
+        vk.load_proc_addresses_instance(instance)
     }
 
     {
         count := u32(16)
         physical_devices_array: [16]vk.PhysicalDevice
-        vk.EnumeratePhysicalDevices(ctx.instance, &count, raw_data(physical_devices_array[:])) or_return
+        vk.EnumeratePhysicalDevices(instance, &count, raw_data(physical_devices_array[:])) or_return
         physical_devices := physical_devices_array[0:int(count)]
 
         #reverse for pd in physical_devices {
-            vk.GetPhysicalDeviceProperties(pd, &ctx.physical_device_properties)
-            if (ctx.physical_device_properties.deviceType == .DISCRETE_GPU) {
-                ctx.physical_device = pd
+            vk.GetPhysicalDeviceProperties(pd, &physical_device_properties)
+            if (physical_device_properties.deviceType == .DISCRETE_GPU) {
+                physical_device = pd
                 break
             }
         }
     }
 
-    vk.GetPhysicalDeviceMemoryProperties(ctx.physical_device, &ctx.physical_device_memory_properties)
-    vk.GetPhysicalDeviceFeatures(ctx.physical_device, &ctx.physical_device_features)
+    vk.GetPhysicalDeviceMemoryProperties(physical_device, &physical_device_memory_properties)
+    vk.GetPhysicalDeviceFeatures(physical_device, &physical_device_features)
 
-    ctx.physical_device_features.robustBufferAccess = false
-    ctx.physical_device_features.fullDrawIndexUint32 = false
-    ctx.physical_device_features.imageCubeArray = false
-    ctx.physical_device_features.independentBlend = false
-    ctx.physical_device_features.geometryShader = false
-    ctx.physical_device_features.tessellationShader = false
-    ctx.physical_device_features.sampleRateShading = false
-    ctx.physical_device_features.dualSrcBlend = false
-    ctx.physical_device_features.logicOp = false
-    ctx.physical_device_features.multiDrawIndirect = false
-    ctx.physical_device_features.drawIndirectFirstInstance = false
-    ctx.physical_device_features.depthClamp = false
-    ctx.physical_device_features.depthBiasClamp = false
-    ctx.physical_device_features.fillModeNonSolid = false
-    ctx.physical_device_features.depthBounds = false
-    ctx.physical_device_features.wideLines = false
-    ctx.physical_device_features.largePoints = false
-    ctx.physical_device_features.alphaToOne = false
-    ctx.physical_device_features.multiViewport = false
-    ctx.physical_device_features.samplerAnisotropy = false
-    ctx.physical_device_features.textureCompressionETC2 = false
-    ctx.physical_device_features.textureCompressionASTC_LDR = false
-    ctx.physical_device_features.textureCompressionBC = false
-    ctx.physical_device_features.occlusionQueryPrecise = false
-    ctx.physical_device_features.pipelineStatisticsQuery = false
-    ctx.physical_device_features.vertexPipelineStoresAndAtomics = false
-    ctx.physical_device_features.fragmentStoresAndAtomics = false
-    ctx.physical_device_features.shaderTessellationAndGeometryPointSize = false
-    ctx.physical_device_features.shaderImageGatherExtended = false
-    ctx.physical_device_features.shaderStorageImageExtendedFormats = false
-    ctx.physical_device_features.shaderStorageImageMultisample = false
-    ctx.physical_device_features.shaderStorageImageReadWithoutFormat = false
-    ctx.physical_device_features.shaderStorageImageWriteWithoutFormat = false
-    ctx.physical_device_features.shaderUniformBufferArrayDynamicIndexing = false
-    ctx.physical_device_features.shaderSampledImageArrayDynamicIndexing = false
-    ctx.physical_device_features.shaderStorageBufferArrayDynamicIndexing = false
-    ctx.physical_device_features.shaderStorageImageArrayDynamicIndexing = false
-    ctx.physical_device_features.shaderClipDistance = false
-    ctx.physical_device_features.shaderCullDistance = false
-    ctx.physical_device_features.shaderFloat64 = false
-    ctx.physical_device_features.shaderInt64 = false
-    ctx.physical_device_features.shaderInt16 = false
-    ctx.physical_device_features.shaderResourceResidency = false
-    ctx.physical_device_features.shaderResourceMinLod = false
-    ctx.physical_device_features.sparseBinding = false
-    ctx.physical_device_features.sparseResidencyBuffer = false
-    ctx.physical_device_features.sparseResidencyImage2D = false
-    ctx.physical_device_features.sparseResidencyImage3D = false
-    ctx.physical_device_features.sparseResidency2Samples = false
-    ctx.physical_device_features.sparseResidency4Samples = false
-    ctx.physical_device_features.sparseResidency8Samples = false
-    ctx.physical_device_features.sparseResidency16Samples = false
-    ctx.physical_device_features.sparseResidencyAliased = false
-    ctx.physical_device_features.variableMultisampleRate = false
-    ctx.physical_device_features.inheritedQueries = false
+    physical_device_features.robustBufferAccess = false
+    physical_device_features.fullDrawIndexUint32 = false
+    physical_device_features.imageCubeArray = false
+    physical_device_features.independentBlend = false
+    physical_device_features.geometryShader = false
+    physical_device_features.tessellationShader = false
+    physical_device_features.sampleRateShading = false
+    physical_device_features.dualSrcBlend = false
+    physical_device_features.logicOp = false
+    physical_device_features.multiDrawIndirect = false
+    physical_device_features.drawIndirectFirstInstance = false
+    physical_device_features.depthClamp = false
+    physical_device_features.depthBiasClamp = false
+    physical_device_features.fillModeNonSolid = false
+    physical_device_features.depthBounds = false
+    physical_device_features.wideLines = false
+    physical_device_features.largePoints = false
+    physical_device_features.alphaToOne = false
+    physical_device_features.multiViewport = false
+    physical_device_features.samplerAnisotropy = false
+    physical_device_features.textureCompressionETC2 = false
+    physical_device_features.textureCompressionASTC_LDR = false
+    physical_device_features.textureCompressionBC = false
+    physical_device_features.occlusionQueryPrecise = false
+    physical_device_features.pipelineStatisticsQuery = false
+    physical_device_features.vertexPipelineStoresAndAtomics = false
+    physical_device_features.fragmentStoresAndAtomics = false
+    physical_device_features.shaderTessellationAndGeometryPointSize = false
+    physical_device_features.shaderImageGatherExtended = false
+    physical_device_features.shaderStorageImageExtendedFormats = false
+    physical_device_features.shaderStorageImageMultisample = false
+    physical_device_features.shaderStorageImageReadWithoutFormat = false
+    physical_device_features.shaderStorageImageWriteWithoutFormat = false
+    physical_device_features.shaderUniformBufferArrayDynamicIndexing = false
+    physical_device_features.shaderSampledImageArrayDynamicIndexing = false
+    physical_device_features.shaderStorageBufferArrayDynamicIndexing = false
+    physical_device_features.shaderStorageImageArrayDynamicIndexing = false
+    physical_device_features.shaderClipDistance = false
+    physical_device_features.shaderCullDistance = false
+    physical_device_features.shaderFloat64 = false
+    physical_device_features.shaderInt64 = false
+    physical_device_features.shaderInt16 = false
+    physical_device_features.shaderResourceResidency = false
+    physical_device_features.shaderResourceMinLod = false
+    physical_device_features.sparseBinding = false
+    physical_device_features.sparseResidencyBuffer = false
+    physical_device_features.sparseResidencyImage2D = false
+    physical_device_features.sparseResidencyImage3D = false
+    physical_device_features.sparseResidency2Samples = false
+    physical_device_features.sparseResidency4Samples = false
+    physical_device_features.sparseResidency8Samples = false
+    physical_device_features.sparseResidency16Samples = false
+    physical_device_features.sparseResidencyAliased = false
+    physical_device_features.variableMultisampleRate = false
+    physical_device_features.inheritedQueries = false
 
     {
         count: u32
-        vk.GetPhysicalDeviceQueueFamilyProperties(ctx.physical_device, &count, nil)
-        ctx.queue_family_properties = make([]vk.QueueFamilyProperties, count, ctx.arena)
-        vk.GetPhysicalDeviceQueueFamilyProperties(ctx.physical_device, &count, raw_data(ctx.queue_family_properties))
+        vk.GetPhysicalDeviceQueueFamilyProperties(physical_device, &count, nil)
+        queue_family_properties = make([]vk.QueueFamilyProperties, count, arena)
+        vk.GetPhysicalDeviceQueueFamilyProperties(physical_device, &count, raw_data(queue_family_properties))
     }
 
-    ctx.surface = vulkan_create_surface(ctx) or_return
-    vk.GetPhysicalDeviceSurfaceCapabilitiesKHR(ctx.physical_device, ctx.surface, &ctx.surface_capabilities) or_return
+    surface = vulkan_create_surface(vulkan) or_return
+    vk.GetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &surface_capabilities) or_return
     {
         count: u32
-        vk.GetPhysicalDeviceSurfaceFormatsKHR(ctx.physical_device, ctx.surface, &count, nil) or_return
-        ctx.surface_formats = make([]vk.SurfaceFormatKHR, count, ctx.arena)
-        vk.GetPhysicalDeviceSurfaceFormatsKHR(ctx.physical_device, ctx.surface, &count, raw_data(ctx.surface_formats)) or_return
+        vk.GetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &count, nil) or_return
+        surface_formats = make([]vk.SurfaceFormatKHR, count, arena)
+        vk.GetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &count, raw_data(surface_formats)) or_return
     }
 
     // TODO: Find out if there have been any papers written about queue family properties.
@@ -343,9 +343,9 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
         1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
     }
 
-    queue_infos := make([dynamic]vk.DeviceQueueCreateInfo, 0, len(ctx.queue_family_properties), context.temp_allocator)
+    queue_infos := make([dynamic]vk.DeviceQueueCreateInfo, 0, len(queue_family_properties), context.temp_allocator)
     queue_count := 0
-    for props, queue_family_idx in ctx.queue_family_properties {
+    for props, queue_family_idx in queue_family_properties {
         if props.queueCount > 0 {
             append(&queue_infos, vk.DeviceQueueCreateInfo{
                 sType = .DEVICE_QUEUE_CREATE_INFO,
@@ -361,60 +361,60 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
         "VK_KHR_swapchain",
     }
 
-    vk.CreateDevice(ctx.physical_device, &{
+    vk.CreateDevice(physical_device, &{
         sType = .DEVICE_CREATE_INFO,
         queueCreateInfoCount = u32(len(queue_infos)),
         pQueueCreateInfos = raw_data(queue_infos),
         enabledExtensionCount = u32(len(device_extensions)),
         ppEnabledExtensionNames = raw_data(device_extensions[:]),
-        pEnabledFeatures = &ctx.physical_device_features,
-    }, nil, &ctx.device) or_return
-    vk.load_proc_addresses_device(ctx.device)
+        pEnabledFeatures = &physical_device_features,
+    }, nil, &device) or_return
+    vk.load_proc_addresses_device(device)
 
-    ctx.queues = make([]vk.Queue, queue_count, ctx.arena)
+    queues = make([]vk.Queue, queue_count, arena)
     queue_array_idx := 0
-    for props, queue_family_idx in ctx.queue_family_properties {
+    for props, queue_family_idx in queue_family_properties {
         for queue_idx in 0..<int(props.queueCount) {
-            vk.GetDeviceQueue(ctx.device, u32(queue_family_idx), u32(queue_idx), &ctx.queues[queue_array_idx])
+            vk.GetDeviceQueue(device, u32(queue_family_idx), u32(queue_idx), &queues[queue_array_idx])
             queue_array_idx += 1
         }
     }
 
     // TODO
-    ctx.graphics_queue = ctx.queues[0]
-    ctx.present_queue = ctx.queues[0]
+    graphics_queue = queues[0]
+    present_queue = queues[0]
 
-    ctx.swapchain_format = ctx.surface_formats[0] // TODO
-    ctx.swapchain_extent = ctx.surface_capabilities.currentExtent
-    vk.CreateSwapchainKHR(ctx.device, &{
+    swapchain_format = surface_formats[0] // TODO
+    swapchain_extent = surface_capabilities.currentExtent
+    vk.CreateSwapchainKHR(device, &{
         sType = .SWAPCHAIN_CREATE_INFO_KHR,
-        surface = ctx.surface,
-        minImageCount = ctx.surface_capabilities.minImageCount, // TODO
-        imageFormat = ctx.swapchain_format.format,
-        imageColorSpace = ctx.swapchain_format.colorSpace,
-        imageExtent = ctx.swapchain_extent,
+        surface = surface,
+        minImageCount = surface_capabilities.minImageCount, // TODO
+        imageFormat = swapchain_format.format,
+        imageColorSpace = swapchain_format.colorSpace,
+        imageExtent = swapchain_extent,
         imageArrayLayers = 1,
         imageUsage = {.COLOR_ATTACHMENT},
-        preTransform = ctx.surface_capabilities.currentTransform,
+        preTransform = surface_capabilities.currentTransform,
         compositeAlpha = {.OPAQUE},
         presentMode = .FIFO, // TODO
         clipped = true,
-    }, nil, &ctx.swapchain) or_return
+    }, nil, &swapchain) or_return
 
     {
         count: u32
-        vk.GetSwapchainImagesKHR(ctx.device, ctx.swapchain, &count, nil) or_return
-        ctx.swapchain_images = make([]vk.Image, count, ctx.arena)
-        vk.GetSwapchainImagesKHR(ctx.device, ctx.swapchain, &count, raw_data(ctx.swapchain_images)) or_return
+        vk.GetSwapchainImagesKHR(device, swapchain, &count, nil) or_return
+        swapchain_images = make([]vk.Image, count, arena)
+        vk.GetSwapchainImagesKHR(device, swapchain, &count, raw_data(swapchain_images)) or_return
     }
 
-    ctx.swapchain_image_views = make([]vk.ImageView, len(ctx.swapchain_images), ctx.arena)
-    for &swapchain_image_view, idx in ctx.swapchain_image_views {
-        vk.CreateImageView(ctx.device, &{
+    swapchain_image_views = make([]vk.ImageView, len(swapchain_images), arena)
+    for &swapchain_image_view, idx in swapchain_image_views {
+        vk.CreateImageView(device, &{
             sType = .IMAGE_VIEW_CREATE_INFO,
-            image = ctx.swapchain_images[idx],
+            image = swapchain_images[idx],
             viewType = .D2,
-            format = ctx.swapchain_format.format,
+            format = swapchain_format.format,
             subresourceRange = {
                 aspectMask = {.COLOR}, 
                 levelCount = 1, 
@@ -422,11 +422,11 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
             },
         }, nil, &swapchain_image_view) or_return
     }
-    ctx.frames = make([]Vulkan_Frame, len(ctx.swapchain_images), ctx.arena)
+    frames = make([]Vulkan_Frame, len(swapchain_images), arena)
 
     {
         color_attachment := vk.AttachmentDescription {
-            format = ctx.swapchain_format.format,
+            format = swapchain_format.format,
             samples = {._1},
             loadOp = .CLEAR,
             storeOp = .STORE,
@@ -470,80 +470,80 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
             pDependencies = &subpass_dependency,
         }
 
-        vk.CreateRenderPass(ctx.device, &info, nil, &ctx.render_pass) or_return
+        vk.CreateRenderPass(device, &info, nil, &render_pass) or_return
     }
 
-    vk.CreateCommandPool(ctx.device, &{
+    vk.CreateCommandPool(device, &{
         sType = .COMMAND_POOL_CREATE_INFO,
         flags = {.TRANSIENT, .RESET_COMMAND_BUFFER},
 
         // TODO:
         // queueFamilyIndex = 0,
-    }, nil, &ctx.command_pool) or_return
+    }, nil, &command_pool) or_return
 
-    command_buffers := make([]vk.CommandBuffer, len(ctx.frames), context.temp_allocator)
+    command_buffers := make([]vk.CommandBuffer, len(frames), context.temp_allocator)
     vk.AllocateCommandBuffers(
-        ctx.device, 
-        &{ sType = .COMMAND_BUFFER_ALLOCATE_INFO, commandPool = ctx.command_pool, commandBufferCount = u32(len(ctx.frames))}, 
+        device, 
+        &{ sType = .COMMAND_BUFFER_ALLOCATE_INFO, commandPool = command_pool, commandBufferCount = u32(len(frames))}, 
         raw_data(command_buffers)) or_return
-    for &frame, idx in ctx.frames {
+    for &frame, idx in frames {
         frame.command_buffer = command_buffers[idx]
     }
 
-    for &frame in ctx.frames {
-        vk.CreateFence(ctx.device, &{sType = .FENCE_CREATE_INFO, flags = {.SIGNALED} }, nil, &frame.fence_in_flight) or_return
+    for &frame in frames {
+        vk.CreateFence(device, &{sType = .FENCE_CREATE_INFO, flags = {.SIGNALED} }, nil, &frame.fence_in_flight) or_return
     }
 
-    for &frame in ctx.frames {
-        vk.CreateSemaphore(ctx.device, &{sType = .SEMAPHORE_CREATE_INFO}, nil, &frame.sem_image_available) or_return
-        vk.CreateSemaphore(ctx.device, &{sType = .SEMAPHORE_CREATE_INFO}, nil, &frame.sem_render_finished) or_return
+    for &frame in frames {
+        vk.CreateSemaphore(device, &{sType = .SEMAPHORE_CREATE_INFO}, nil, &frame.sem_image_available) or_return
+        vk.CreateSemaphore(device, &{sType = .SEMAPHORE_CREATE_INFO}, nil, &frame.sem_render_finished) or_return
     }
 
-    ctx.swapchain_framebuffers = make([]vk.Framebuffer, len(ctx.swapchain_images), ctx.arena)
-    for idx in 0..<len(ctx.swapchain_images) {
+    swapchain_framebuffers = make([]vk.Framebuffer, len(swapchain_images), arena)
+    for idx in 0..<len(swapchain_images) {
         attachments := [?]vk.ImageView {
-            ctx.swapchain_image_views[idx],
+            swapchain_image_views[idx],
         }
 
         info := vk.FramebufferCreateInfo {
             sType = .FRAMEBUFFER_CREATE_INFO,
-            renderPass = ctx.render_pass,
+            renderPass = render_pass,
             attachmentCount = u32(len(attachments)),
             pAttachments = raw_data(attachments[:]),
-            width = ctx.swapchain_extent.width,
-            height = ctx.swapchain_extent.height,
+            width = swapchain_extent.width,
+            height = swapchain_extent.height,
             layers = 1,
         }
-        vk.CreateFramebuffer(ctx.device, &info, nil, &ctx.swapchain_framebuffers[idx]) or_return
+        vk.CreateFramebuffer(device, &info, nil, &swapchain_framebuffers[idx]) or_return
     }
 
-    vk.CreateSampler(ctx.device, &{sType = .SAMPLER_CREATE_INFO}, nil, &ctx.default_sampler) or_return
+    vk.CreateSampler(device, &{sType = .SAMPLER_CREATE_INFO}, nil, &default_sampler) or_return
 
-    vk.CreatePipelineLayout(ctx.device, &{sType = .PIPELINE_LAYOUT_CREATE_INFO}, nil, &ctx.default_pipeline_layout) or_return
-    vk.CreatePipelineCache(ctx.device, &{sType = .PIPELINE_CACHE_CREATE_INFO}, nil, &ctx.default_pipeline_cache) or_return
+    vk.CreatePipelineLayout(device, &{sType = .PIPELINE_LAYOUT_CREATE_INFO}, nil, &default_pipeline_layout) or_return
+    vk.CreatePipelineCache(device, &{sType = .PIPELINE_CACHE_CREATE_INFO}, nil, &default_pipeline_cache) or_return
 
-    ctx.default_input_assembly_info = vk.PipelineInputAssemblyStateCreateInfo {
+    default_input_assembly_info = vk.PipelineInputAssemblyStateCreateInfo {
         sType = .PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
         topology = .TRIANGLE_LIST,
     }
 
-    ctx.default_viewport = vk.Viewport {
-        width = f32(ctx.swapchain_extent.width),
-        height = f32(ctx.swapchain_extent.height),
+    default_viewport = vk.Viewport {
+        width = f32(swapchain_extent.width),
+        height = f32(swapchain_extent.height),
         maxDepth = 1.0,
     }
-    ctx.default_scissor = vk.Rect2D {
-        extent = ctx.swapchain_extent,
+    default_scissor = vk.Rect2D {
+        extent = swapchain_extent,
     }
-    ctx.default_viewport_info = vk.PipelineViewportStateCreateInfo {
+    default_viewport_info = vk.PipelineViewportStateCreateInfo {
         sType = .PIPELINE_VIEWPORT_STATE_CREATE_INFO,
         viewportCount = 1,
-        pViewports = &ctx.default_viewport,
+        pViewports = &default_viewport,
         scissorCount = 1,
-        pScissors = &ctx.default_scissor,
+        pScissors = &default_scissor,
     }
 
-    ctx.default_rasterization_info = vk.PipelineRasterizationStateCreateInfo {
+    default_rasterization_info = vk.PipelineRasterizationStateCreateInfo {
         sType = .PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
         polygonMode = .FILL,
         cullMode = {.BACK},
@@ -551,38 +551,38 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
         lineWidth = 1.0,
     }
 
-    ctx.default_multisample_info = vk.PipelineMultisampleStateCreateInfo {
+    default_multisample_info = vk.PipelineMultisampleStateCreateInfo {
         sType = .PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
         rasterizationSamples = {._1},
     }
 
-    ctx.default_color_blend_attachment_info = vk.PipelineColorBlendAttachmentState {
+    default_color_blend_attachment_info = vk.PipelineColorBlendAttachmentState {
         colorWriteMask = {.R, .G, .B, .A},
     }
-    ctx.default_color_blend_info = vk.PipelineColorBlendStateCreateInfo {
+    default_color_blend_info = vk.PipelineColorBlendStateCreateInfo {
         sType = .PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
         attachmentCount = 1,
-        pAttachments = &ctx.default_color_blend_attachment_info,
+        pAttachments = &default_color_blend_attachment_info,
     }
 
-    ctx.default_dynamic_state_info = vk.PipelineDynamicStateCreateInfo {
+    default_dynamic_state_info = vk.PipelineDynamicStateCreateInfo {
         sType = .PIPELINE_DYNAMIC_STATE_CREATE_INFO,
     }
 
-    ctx.default_pipeline_info = vk.GraphicsPipelineCreateInfo {
+    default_pipeline_info = vk.GraphicsPipelineCreateInfo {
         sType = .GRAPHICS_PIPELINE_CREATE_INFO,
         flags = {},
-        pInputAssemblyState = &ctx.default_input_assembly_info,
-        pViewportState = &ctx.default_viewport_info,
-        pRasterizationState = &ctx.default_rasterization_info,
-        pMultisampleState = &ctx.default_multisample_info,
-        pColorBlendState = &ctx.default_color_blend_info,
-        pDynamicState = &ctx.default_dynamic_state_info,
-        layout = ctx.default_pipeline_layout,
-        renderPass = ctx.render_pass,
+        pInputAssemblyState = &default_input_assembly_info,
+        pViewportState = &default_viewport_info,
+        pRasterizationState = &default_rasterization_info,
+        pMultisampleState = &default_multisample_info,
+        pColorBlendState = &default_color_blend_info,
+        pDynamicState = &default_dynamic_state_info,
+        layout = default_pipeline_layout,
+        renderPass = render_pass,
     }
     when VULKAN_DISABLE_PIPELINE_OPTIMIZATION {
-        ctx.default_pipeline_info.flags += {.DISABLE_OPTIMIZATION}
+        default_pipeline_info.flags += {.DISABLE_OPTIMIZATION}
     }
         
     /*
@@ -714,13 +714,13 @@ vulkan_init :: proc(ctx: ^Vulkan) -> vk.Result {
     return .SUCCESS
 }
 
-vulkan_create_graphics_pipeline_with_defaults :: proc(ctx: ^Vulkan, shader_stages: []vk.PipelineShaderStageCreateInfo, vertex_input: ^vk.PipelineVertexInputStateCreateInfo) -> (pipeline: vk.Pipeline, res: vk.Result) {
-    pipeline_info := ctx.default_pipeline_info
+vulkan_create_graphics_pipeline_with_defaults :: proc(using vulkan: ^Vulkan, shader_stages: []vk.PipelineShaderStageCreateInfo, vertex_input: ^vk.PipelineVertexInputStateCreateInfo) -> (pipeline: vk.Pipeline, res: vk.Result) {
+    pipeline_info := default_pipeline_info
     pipeline_info.stageCount = u32(len(shader_stages))
     pipeline_info.pStages = raw_data(shader_stages)
     pipeline_info.pVertexInputState = vertex_input
 
-    res = vk.CreateGraphicsPipelines(ctx.device, ctx.default_pipeline_cache, 1, &pipeline_info, nil, &pipeline)
+    res = vk.CreateGraphicsPipelines(device, default_pipeline_cache, 1, &pipeline_info, nil, &pipeline)
     return
 }
 
@@ -803,13 +803,13 @@ vulkan_create_graphics_pipeline :: proc {vulkan_create_graphics_pipeline_with_de
 
 // vulkan_get_format :: proc{vulkan_get_format_from_cgltf_component_type_and_cgltf_type}
 
-vulkan_begin_frame :: proc(ctx: ^Vulkan) -> (cb: vk.CommandBuffer, res: vk.Result) {
-    vk.WaitForFences(ctx.device, 1, &ctx.frames[ctx.frame_idx].fence_in_flight, true, max(u64)) or_return
-    vk.ResetFences(ctx.device, 1, &ctx.frames[ctx.frame_idx].fence_in_flight) or_return
+vulkan_begin_frame :: proc(using vulkan: ^Vulkan) -> (cb: vk.CommandBuffer, res: vk.Result) {
+    vk.WaitForFences(device, 1, &frames[frame_idx].fence_in_flight, true, max(u64)) or_return
+    vk.ResetFences(device, 1, &frames[frame_idx].fence_in_flight) or_return
 
-    vk.AcquireNextImageKHR(ctx.device, ctx.swapchain, max(u64), ctx.frames[ctx.frame_idx].sem_image_available, vk.Fence{}, &ctx.image_idx) or_return
+    vk.AcquireNextImageKHR(device, swapchain, max(u64), frames[frame_idx].sem_image_available, vk.Fence{}, &image_idx) or_return
 
-    if ctx.image_idx == 0 {
+    if image_idx == 0 {
         @static app_ready := -1
         if app_ready == -1 {
             app_ready += 1
@@ -819,7 +819,7 @@ vulkan_begin_frame :: proc(ctx: ^Vulkan) -> (cb: vk.CommandBuffer, res: vk.Resul
         }
     }
 
-    cb = ctx.frames[ctx.frame_idx].command_buffer
+    cb = frames[frame_idx].command_buffer
     vk.BeginCommandBuffer(cb, &{
         sType = .COMMAND_BUFFER_BEGIN_INFO,
         flags = {.ONE_TIME_SUBMIT},
@@ -828,34 +828,34 @@ vulkan_begin_frame :: proc(ctx: ^Vulkan) -> (cb: vk.CommandBuffer, res: vk.Resul
     return
 }
 
-vulkan_end_frame :: proc(ctx: ^Vulkan) -> vk.Result {
-    cb := ctx.frames[ctx.frame_idx].command_buffer
+vulkan_end_frame :: proc(using vulkan: ^Vulkan) -> vk.Result {
+    cb := frames[frame_idx].command_buffer
     vk.EndCommandBuffer(cb) or_return
 
     wait_stage := vk.PipelineStageFlags{.COLOR_ATTACHMENT_OUTPUT}
     submit_info := vk.SubmitInfo {
         sType = .SUBMIT_INFO,
         waitSemaphoreCount = 1,
-        pWaitSemaphores = &ctx.frames[ctx.frame_idx].sem_image_available,
+        pWaitSemaphores = &frames[frame_idx].sem_image_available,
         pWaitDstStageMask = &wait_stage,
         commandBufferCount = 1,
         pCommandBuffers = &cb,
         signalSemaphoreCount = 1,
-        pSignalSemaphores = &ctx.frames[ctx.frame_idx].sem_render_finished,
+        pSignalSemaphores = &frames[frame_idx].sem_render_finished,
     }
-    vk.QueueSubmit(ctx.graphics_queue, 1, &submit_info, ctx.frames[ctx.frame_idx].fence_in_flight) or_return
+    vk.QueueSubmit(graphics_queue, 1, &submit_info, frames[frame_idx].fence_in_flight) or_return
 
     present_info := vk.PresentInfoKHR {
         sType = .PRESENT_INFO_KHR,
         waitSemaphoreCount = 1,
-        pWaitSemaphores = &ctx.frames[ctx.frame_idx].sem_render_finished,
+        pWaitSemaphores = &frames[frame_idx].sem_render_finished,
         swapchainCount = 1,
-        pSwapchains = &ctx.swapchain,
-        pImageIndices = &ctx.image_idx,
+        pSwapchains = &swapchain,
+        pImageIndices = &image_idx,
     }
-    vk.QueuePresentKHR(ctx.graphics_queue, &present_info) or_return
+    vk.QueuePresentKHR(graphics_queue, &present_info) or_return
 
-    ctx.frame_idx = (ctx.frame_idx + 1) % len(ctx.frames)
+    frame_idx = (frame_idx + 1) % len(frames)
 
     return .SUCCESS
 }
