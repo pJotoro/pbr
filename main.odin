@@ -35,9 +35,11 @@ Vulkan :: struct {
     instance_extension_properties: []vk.ExtensionProperties,
 
     physical_device: vk.PhysicalDevice,
-    physical_device_properties: vk.PhysicalDeviceProperties,
     physical_device_memory_properties: vk.PhysicalDeviceMemoryProperties,
-    physical_device_features: vk.PhysicalDeviceFeatures,
+    physical_device_properties: vk.PhysicalDeviceProperties2,
+    physical_device_vulkan_11_properties: vk.PhysicalDeviceVulkan11Properties,
+    physical_device_features: vk.PhysicalDeviceFeatures2,
+    physical_device_vulkan_11_features: vk.PhysicalDeviceVulkan11Features,
 
     surface: vk.SurfaceKHR,
     surface_capabilities: vk.SurfaceCapabilitiesKHR,
@@ -95,7 +97,7 @@ Vulkan :: struct {
     default_pipeline_info: vk.GraphicsPipelineCreateInfo,
 }
 
-vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
+vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32) -> vk.Result {
     {
         did_load: bool
         if lib, did_load = dynlib.load_library(VULKAN_LIB_NAME); !did_load {
@@ -105,6 +107,20 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
     {
         vkGetInstanceProcAddr := dynlib.symbol_address(lib, "vkGetInstanceProcAddr")
         vk.load_proc_addresses_global(vkGetInstanceProcAddr)
+    }
+    
+    api_version: u32
+    {
+        if (vk.EnumerateInstanceVersion == nil) {
+            return .ERROR_INCOMPATIBLE_DRIVER
+        }
+        vk.EnumerateInstanceVersion(&api_version) or_return
+        if api_version < minimum_version {
+            return .ERROR_INCOMPATIBLE_DRIVER
+        }
+        if api_version > desired_version {
+            api_version = desired_version
+        }
     }
 
     when VULKAN_LAYERS {
@@ -192,7 +208,7 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
             applicationVersion = vk.API_VERSION_1_0,
             pEngineName = "pbr",
             engineVersion = vk.API_VERSION_1_0,
-            apiVersion = vk.API_VERSION_1_0,
+            apiVersion = api_version,
         }
 
         create_info := vk.InstanceCreateInfo {
@@ -252,72 +268,95 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
         physical_devices := physical_devices_array[0:int(count)]
 
         #reverse for pd in physical_devices {
-            vk.GetPhysicalDeviceProperties(pd, &physical_device_properties)
-            if (physical_device_properties.deviceType == .DISCRETE_GPU) {
+            properties: vk.PhysicalDeviceProperties
+            vk.GetPhysicalDeviceProperties(pd, &properties)
+            if (properties.deviceType == .DISCRETE_GPU) {
                 physical_device = pd
                 break
             }
         }
     }
 
-    vk.GetPhysicalDeviceMemoryProperties(physical_device, &physical_device_memory_properties)
-    vk.GetPhysicalDeviceFeatures(physical_device, &physical_device_features)
+    physical_device_properties.sType = .PHYSICAL_DEVICE_PROPERTIES_2
+    physical_device_properties.pNext = &physical_device_vulkan_11_properties
+    physical_device_vulkan_11_properties.sType = .PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES
+    vk.GetPhysicalDeviceProperties2(physical_device, &physical_device_properties)
 
-    physical_device_features.robustBufferAccess = false
-    physical_device_features.fullDrawIndexUint32 = false
-    physical_device_features.imageCubeArray = false
-    physical_device_features.independentBlend = false
-    physical_device_features.geometryShader = false
-    physical_device_features.tessellationShader = false
-    physical_device_features.sampleRateShading = false
-    physical_device_features.dualSrcBlend = false
-    physical_device_features.logicOp = false
-    physical_device_features.multiDrawIndirect = false
-    physical_device_features.drawIndirectFirstInstance = false
-    physical_device_features.depthClamp = false
-    physical_device_features.depthBiasClamp = false
-    physical_device_features.fillModeNonSolid = false
-    physical_device_features.depthBounds = false
-    physical_device_features.wideLines = false
-    physical_device_features.largePoints = false
-    physical_device_features.alphaToOne = false
-    physical_device_features.multiViewport = false
-    physical_device_features.samplerAnisotropy = false
-    physical_device_features.textureCompressionETC2 = false
-    physical_device_features.textureCompressionASTC_LDR = false
-    physical_device_features.textureCompressionBC = false
-    physical_device_features.occlusionQueryPrecise = false
-    physical_device_features.pipelineStatisticsQuery = false
-    physical_device_features.vertexPipelineStoresAndAtomics = false
-    physical_device_features.fragmentStoresAndAtomics = false
-    physical_device_features.shaderTessellationAndGeometryPointSize = false
-    physical_device_features.shaderImageGatherExtended = false
-    physical_device_features.shaderStorageImageExtendedFormats = false
-    physical_device_features.shaderStorageImageMultisample = false
-    physical_device_features.shaderStorageImageReadWithoutFormat = false
-    physical_device_features.shaderStorageImageWriteWithoutFormat = false
-    physical_device_features.shaderUniformBufferArrayDynamicIndexing = false
-    physical_device_features.shaderSampledImageArrayDynamicIndexing = false
-    physical_device_features.shaderStorageBufferArrayDynamicIndexing = false
-    physical_device_features.shaderStorageImageArrayDynamicIndexing = false
-    physical_device_features.shaderClipDistance = false
-    physical_device_features.shaderCullDistance = false
-    physical_device_features.shaderFloat64 = false
-    physical_device_features.shaderInt64 = false
-    physical_device_features.shaderInt16 = false
-    physical_device_features.shaderResourceResidency = false
-    physical_device_features.shaderResourceMinLod = false
-    physical_device_features.sparseBinding = false
-    physical_device_features.sparseResidencyBuffer = false
-    physical_device_features.sparseResidencyImage2D = false
-    physical_device_features.sparseResidencyImage3D = false
-    physical_device_features.sparseResidency2Samples = false
-    physical_device_features.sparseResidency4Samples = false
-    physical_device_features.sparseResidency8Samples = false
-    physical_device_features.sparseResidency16Samples = false
-    physical_device_features.sparseResidencyAliased = false
-    physical_device_features.variableMultisampleRate = false
-    physical_device_features.inheritedQueries = false
+    vk.GetPhysicalDeviceMemoryProperties(physical_device, &physical_device_memory_properties)
+
+    physical_device_features.sType = .PHYSICAL_DEVICE_FEATURES_2
+    physical_device_features.pNext = &physical_device_vulkan_11_features
+    physical_device_vulkan_11_features.sType = .PHYSICAL_DEVICE_VULKAN_1_1_FEATURES
+    vk.GetPhysicalDeviceFeatures2(physical_device, &physical_device_features)
+
+    physical_device_features.features.robustBufferAccess = false
+    physical_device_features.features.fullDrawIndexUint32 = false
+    physical_device_features.features.imageCubeArray = false
+    physical_device_features.features.independentBlend = false
+    physical_device_features.features.geometryShader = false
+    physical_device_features.features.tessellationShader = false
+    physical_device_features.features.sampleRateShading = false
+    physical_device_features.features.dualSrcBlend = false
+    physical_device_features.features.logicOp = false
+    physical_device_features.features.multiDrawIndirect = false
+    physical_device_features.features.drawIndirectFirstInstance = false
+    physical_device_features.features.depthClamp = false
+    physical_device_features.features.depthBiasClamp = false
+    physical_device_features.features.fillModeNonSolid = false
+    physical_device_features.features.depthBounds = false
+    physical_device_features.features.wideLines = false
+    physical_device_features.features.largePoints = false
+    physical_device_features.features.alphaToOne = false
+    physical_device_features.features.multiViewport = false
+    physical_device_features.features.samplerAnisotropy = false
+    physical_device_features.features.textureCompressionETC2 = false
+    physical_device_features.features.textureCompressionASTC_LDR = false
+    physical_device_features.features.textureCompressionBC = false
+    physical_device_features.features.occlusionQueryPrecise = false
+    physical_device_features.features.pipelineStatisticsQuery = false
+    physical_device_features.features.vertexPipelineStoresAndAtomics = false
+    physical_device_features.features.fragmentStoresAndAtomics = false
+    physical_device_features.features.shaderTessellationAndGeometryPointSize = false
+    physical_device_features.features.shaderImageGatherExtended = false
+    physical_device_features.features.shaderStorageImageExtendedFormats = false
+    physical_device_features.features.shaderStorageImageMultisample = false
+    physical_device_features.features.shaderStorageImageReadWithoutFormat = false
+    physical_device_features.features.shaderStorageImageWriteWithoutFormat = false
+    physical_device_features.features.shaderUniformBufferArrayDynamicIndexing = false
+    physical_device_features.features.shaderSampledImageArrayDynamicIndexing = false
+    physical_device_features.features.shaderStorageBufferArrayDynamicIndexing = false
+    physical_device_features.features.shaderStorageImageArrayDynamicIndexing = false
+    physical_device_features.features.shaderClipDistance = false
+    physical_device_features.features.shaderCullDistance = false
+    physical_device_features.features.shaderFloat64 = false
+    physical_device_features.features.shaderInt64 = false
+    physical_device_features.features.shaderInt16 = false
+    physical_device_features.features.shaderResourceResidency = false
+    physical_device_features.features.shaderResourceMinLod = false
+    physical_device_features.features.sparseBinding = false
+    physical_device_features.features.sparseResidencyBuffer = false
+    physical_device_features.features.sparseResidencyImage2D = false
+    physical_device_features.features.sparseResidencyImage3D = false
+    physical_device_features.features.sparseResidency2Samples = false
+    physical_device_features.features.sparseResidency4Samples = false
+    physical_device_features.features.sparseResidency8Samples = false
+    physical_device_features.features.sparseResidency16Samples = false
+    physical_device_features.features.sparseResidencyAliased = false
+    physical_device_features.features.variableMultisampleRate = false
+    physical_device_features.features.inheritedQueries = false
+
+    physical_device_vulkan_11_features.storageBuffer16BitAccess = false
+    physical_device_vulkan_11_features.uniformAndStorageBuffer16BitAccess = false
+    physical_device_vulkan_11_features.storagePushConstant16 = false
+    physical_device_vulkan_11_features.storageInputOutput16 = false
+    physical_device_vulkan_11_features.multiview = false
+    physical_device_vulkan_11_features.multiviewGeometryShader = false
+    physical_device_vulkan_11_features.multiviewTessellationShader = false
+    physical_device_vulkan_11_features.variablePointersStorageBuffer = false
+    physical_device_vulkan_11_features.variablePointers = false
+    physical_device_vulkan_11_features.protectedMemory = false
+    physical_device_vulkan_11_features.samplerYcbcrConversion = false
+    physical_device_vulkan_11_features.shaderDrawParameters = false
 
     {
         count: u32
@@ -363,11 +402,11 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
 
     vk.CreateDevice(physical_device, &{
         sType = .DEVICE_CREATE_INFO,
+        pNext = &physical_device_features,
         queueCreateInfoCount = u32(len(queue_infos)),
         pQueueCreateInfos = raw_data(queue_infos),
         enabledExtensionCount = u32(len(device_extensions)),
         ppEnabledExtensionNames = raw_data(device_extensions[:]),
-        pEnabledFeatures = &physical_device_features,
     }, nil, &device) or_return
     vk.load_proc_addresses_device(device)
 
@@ -811,57 +850,6 @@ vulkan_end_rendering_commands :: proc(using vulkan: ^Vulkan) -> vk.Result {
     return .SUCCESS
 }
 
-Vulkan_Buffer :: struct {
-    handle: vk.Buffer,
-    memory: vk.DeviceMemory,
-    offset, size: vk.DeviceSize,
-}
-
-vulkan_create_buffer :: proc(using vulkan: ^Vulkan, create_info: ^vk.BufferCreateInfo, memory_property_flags: vk.MemoryPropertyFlags) -> (buffer: Vulkan_Buffer, res: vk.Result) {
-    vk.CreateBuffer(device, create_info, nil, &buffer.handle) or_return
-
-    memory_requirements: vk.MemoryRequirements
-    vk.GetBufferMemoryRequirements(device, buffer.handle, &memory_requirements)
-
-    memory_type_idx := -1
-    memory_types := physical_device_memory_properties.memoryTypes[0:int(physical_device_memory_properties.memoryTypeCount)]
-    for memory_type, idx in memory_types {
-        if memory_property_flags <= memory_type.propertyFlags {
-            memory_type_idx = idx
-            break
-        }
-    }
-    assert(memory_type_idx != -1)
-
-    allocate_info := vk.MemoryAllocateInfo {
-        sType = .MEMORY_ALLOCATE_INFO,
-        allocationSize = memory_requirements.size,
-        memoryTypeIndex = u32(memory_type_idx),
-    }
-    vk.AllocateMemory(device, &allocate_info, nil, &buffer.memory) or_return
-
-    return
-}
-
-vulkan_map_memory_buffer :: proc(using vulkan: ^Vulkan, buffer: ^Vulkan_Buffer) -> (data: []byte, res: vk.Result) {
-    p: rawptr
-    res = vk.MapMemory(device, buffer.memory, buffer.offset, buffer.size - buffer.offset, {}, &p)
-    data = transmute([]byte)mem.Raw_Slice{p, int(buffer.size - buffer.offset)}
-    return
-}
-
-vulkan_map_memory :: proc {
-    vulkan_map_memory_buffer,
-}
-
-vulkan_unmap_memory_buffer :: proc(using vulkan: ^Vulkan, buffer: ^Vulkan_Buffer) {
-    vk.UnmapMemory(device, buffer.memory)
-}
-
-vulkan_unmap_memory :: proc {
-    vulkan_unmap_memory_buffer,
-}
-
 vulkan_begin_rendering :: proc(using vulkan: ^Vulkan, r, g, b, a: f32) {
     vk.CmdBeginRenderPass(frames[frame_idx].command_buffer, &{
         sType = .RENDER_PASS_BEGIN_INFO,
@@ -892,7 +880,7 @@ main :: proc() {
 
     vulkan: Vulkan
     vulkan.arena = mem.arena_allocator(&{data = make([]byte, mem.Megabyte)})
-    if res := vulkan_init(&vulkan); res != .SUCCESS {
+    if res := vulkan_init(&vulkan, vk.API_VERSION_1_1, vk.API_VERSION_1_1); res != .SUCCESS {
         app_panic("Your graphics driver is out of date.")
     }
 
@@ -928,26 +916,24 @@ main :: proc() {
         projection: matrix[4, 4]f32,
     }
 
-    uniform_buffer: Vulkan_Buffer
-    if b, res := vulkan_create_buffer(&vulkan, &{
-        sType = .BUFFER_CREATE_INFO,
-        size = size_of(Uniforms),
-        usage = {.TRANSFER_DST, .UNIFORM_BUFFER},
-    }, {.DEVICE_LOCAL}); res != .SUCCESS {
+    vulkan_allocator := vulkan_create_allocator()
+
+    uniform_buffer: vk.Buffer
+    if b, res := vulkan_create_buffer(&vulkan, &vulkan_allocator, size_of(Uniforms), {.TRANSFER_DST, .UNIFORM_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE}); res != .SUCCESS {
         app_panic("Failed to create uniform buffer.")
     } else {
         uniform_buffer = b
     }
 
-    staging_buffer: Vulkan_Buffer
-    if b, res := vulkan_create_buffer(&vulkan, &{
-        sType = .BUFFER_CREATE_INFO,
-        size = size_of(Uniforms),
-        usage = {.TRANSFER_SRC},
-    }, {.HOST_VISIBLE, .HOST_COHERENT}); res != .SUCCESS {
+    staging_buffer: vk.Buffer
+    if b, res := vulkan_create_buffer(&vulkan, &vulkan_allocator, size_of(Uniforms), {.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT}, {.DEVICE_LOCAL}); res != .SUCCESS {
         app_panic("Failed to create staging buffer.")
     } else {
         staging_buffer = b
+    }
+
+    if res := vulkan_alloc(&vulkan, &vulkan_allocator); res != .SUCCESS {
+        app_panic("Failed to allocate GPU memory.")
     }
 
     for app_update() {
