@@ -57,6 +57,7 @@ Vulkan :: struct {
     swapchain_format: vk.SurfaceFormatKHR,
     swapchain_extent: vk.Extent2D,
     swapchain_framebuffers: []vk.Framebuffer,
+    image_idx: u32,
 
     render_pass: vk.RenderPass,
 
@@ -92,9 +93,6 @@ Vulkan :: struct {
     default_dynamic_state: vk.PipelineDynamicStateCreateInfo,
 
     default_pipeline_info: vk.GraphicsPipelineCreateInfo,
-
-    staged: bool,
-    image_idx: u32,
 }
 
 vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
@@ -756,7 +754,7 @@ vulkan_create_graphics_pipeline :: proc(
 
 // TODO: vulkan_create_graphics_pipelines
 
-vulkan_begin_frame :: proc(using vulkan: ^Vulkan) -> (cb: vk.CommandBuffer, res: vk.Result) {
+vulkan_begin_rendering_commands :: proc(using vulkan: ^Vulkan) -> (cb: vk.CommandBuffer, res: vk.Result) {
     vk.WaitForFences(device, 1, &frames[frame_idx].fence_in_flight, true, max(u64)) or_return
     vk.ResetFences(device, 1, &frames[frame_idx].fence_in_flight) or_return
 
@@ -781,7 +779,7 @@ vulkan_begin_frame :: proc(using vulkan: ^Vulkan) -> (cb: vk.CommandBuffer, res:
     return
 }
 
-vulkan_end_frame :: proc(using vulkan: ^Vulkan) -> vk.Result {
+vulkan_end_rendering_commands :: proc(using vulkan: ^Vulkan) -> vk.Result {
     cb := frames[frame_idx].command_buffer
     vk.EndCommandBuffer(cb) or_return
 
@@ -864,6 +862,25 @@ vulkan_unmap_memory :: proc {
     vulkan_unmap_memory_buffer,
 }
 
+vulkan_begin_rendering :: proc(using vulkan: ^Vulkan, r, g, b, a: f32) {
+    vk.CmdBeginRenderPass(frames[frame_idx].command_buffer, &{
+        sType = .RENDER_PASS_BEGIN_INFO,
+        renderPass = render_pass,
+        framebuffer = swapchain_framebuffers[int(image_idx)],
+        renderArea = { extent = swapchain_extent },
+        clearValueCount = 1,
+        pClearValues = &vk.ClearValue {
+            color = {
+                float32 = {r, g, b, a},
+            },
+        },
+    }, .INLINE)
+}
+
+vulkan_end_rendering :: proc(using vulkan: ^Vulkan) {
+    vk.CmdEndRenderPass(frames[frame_idx].command_buffer)
+}
+
 main :: proc() {
     when STACK_TRACE {
         trace.init(&global_trace_ctx)
@@ -935,33 +952,22 @@ main :: proc() {
 
     for app_update() {
         cb: vk.CommandBuffer
-        if command_buffer, res := vulkan_begin_frame(&vulkan); res != .SUCCESS {
+        if command_buffer, res := vulkan_begin_rendering_commands(&vulkan); res != .SUCCESS {
             app_panic("Unexpected failure occurred.")
         } else {
             cb = command_buffer
         }
 
-        vk.CmdBeginRenderPass(cb, &{
-            sType = .RENDER_PASS_BEGIN_INFO,
-            renderPass = vulkan.render_pass,
-            framebuffer = vulkan.swapchain_framebuffers[int(vulkan.image_idx)],
-            renderArea = { extent = vulkan.swapchain_extent },
-            clearValueCount = 1,
-            pClearValues = &vk.ClearValue {
-                color = {
-                    float32 = {0.0, 0.0, 0.0, 0.0},
-                },
-            },
-        }, .INLINE)
+        vulkan_begin_rendering(&vulkan, 0.0, 0.0, 0.0, 0.0)
+        {
+            vk.CmdBindPipeline(cb, .GRAPHICS, pipeline)
+            vk.CmdDraw(commandBuffer = cb,
+                vertexCount = 3, instanceCount = 1,
+                firstVertex = 0, firstInstance = 0)
+        }
+        vulkan_end_rendering(&vulkan)
 
-        vk.CmdBindPipeline(cb, .GRAPHICS, pipeline)
-        vk.CmdDraw(commandBuffer = cb,
-            vertexCount = 3, instanceCount = 1,
-            firstVertex = 0, firstInstance = 0)
-
-        vk.CmdEndRenderPass(cb)
-
-        if res := vulkan_end_frame(&vulkan); res != .SUCCESS {
+        if res := vulkan_end_rendering_commands(&vulkan); res != .SUCCESS {
             app_panic("Unexpected failure occurred.")
         }
 
