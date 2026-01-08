@@ -728,81 +728,6 @@ vulkan_create_graphics_pipeline :: proc {vulkan_create_graphics_pipeline_with_de
 
 // TODO: vulkan_create_graphics_pipelines
 
-// vulkan_get_format_from_cgltf_component_type_and_cgltf_type :: #force_inline proc "contextless" (cgltf_component_type: cgltf.component_type, cgltf_type: cgltf.type) -> vk.Format {
-//     #partial switch cgltf_component_type {
-//         case .r_8:
-//             #partial switch cgltf_type {
-//                 case .scalar:
-//                     return .R8_SINT
-//                 case .vec2:
-//                     return .R8G8_SINT
-//                 case .vec3:
-//                     return .R8G8B8_SINT
-//                 case .vec4:
-//                     return .R8G8B8A8_SINT
-//             }
-//         case .r_8u:
-//             #partial switch cgltf_type {
-//                 case .scalar:
-//                     return .R8_UINT
-//                 case .vec2:
-//                     return .R8G8_UINT
-//                 case .vec3:
-//                     return .R8G8B8_UINT
-//                 case .vec4:
-//                     return .R8G8B8A8_UINT
-//             }
-//         case .r_16:
-//             #partial switch cgltf_type {
-//                 case .scalar:
-//                     return .R16_SINT
-//                 case .vec2:
-//                     return .R16G16_SINT
-//                 case .vec3:
-//                     return .R16G16B16_SINT
-//                 case .vec4:
-//                     return .R16G16B16A16_SINT
-//             }
-//         case .r_16u:
-//             #partial switch cgltf_type {
-//                 case .scalar:
-//                     return .R16_UINT
-//                 case .vec2:
-//                     return .R16G16_UINT
-//                 case .vec3:
-//                     return .R16G16B16_UINT
-//                 case .vec4:
-//                     return .R16G16B16A16_UINT
-//             }
-//         case .r_32u:
-//             #partial switch cgltf_type {
-//                 case .scalar:
-//                     return .R32_UINT
-//                 case .vec2:
-//                     return .R32G32_UINT
-//                 case .vec3:
-//                     return .R32G32B32_UINT
-//                 case .vec4:
-//                     return .R32G32B32A32_UINT
-//             }
-//         case .r_32f:
-//             #partial switch cgltf_type {
-//                 case .scalar:
-//                     return .R32_SFLOAT
-//                 case .vec2:
-//                     return .R32G32_SFLOAT
-//                 case .vec3:
-//                     return .R32G32B32_SFLOAT
-//                 case .vec4:
-//                     return .R32G32B32A32_SFLOAT
-//             }
-//     }
-
-//     return .UNDEFINED
-// }
-
-// vulkan_get_format :: proc{vulkan_get_format_from_cgltf_component_type_and_cgltf_type}
-
 vulkan_begin_frame :: proc(using vulkan: ^Vulkan) -> (cb: vk.CommandBuffer, res: vk.Result) {
     vk.WaitForFences(device, 1, &frames[frame_idx].fence_in_flight, true, max(u64)) or_return
     vk.ResetFences(device, 1, &frames[frame_idx].fence_in_flight) or_return
@@ -860,51 +785,20 @@ vulkan_end_frame :: proc(using vulkan: ^Vulkan) -> vk.Result {
     return .SUCCESS
 }
 
-// cgltf_load :: proc(name: string) -> (out_data: ^cgltf.data, res: cgltf.result) {
-//     file_data, ok := os.read_entire_file(name, context.temp_allocator)
-//     if !ok {
-//         res = .file_not_found
-//         return
-//     }
-
-//     alloc_proc :: proc "c" (user: rawptr, size: uint) -> rawptr {
-//         context = runtime.default_context()
-//         data := make([]byte, size, context.temp_allocator)
-//         return raw_data(data)
-//     }
-
-//     free_proc :: proc "c" (user: rawptr, ptr: rawptr) {
-
-//     }
-
-//     memory_options := cgltf.memory_options {
-//         alloc_func = alloc_proc,
-//         free_func = free_proc,
-//         user_data = nil,
-//     }
-
-//     options := cgltf.options {
-//         type = .glb,
-//         memory = memory_options,
-//     }
-
-//     return cgltf.parse(options, raw_data(file_data), len(file_data))
-// }
-
 Vulkan_Buffer :: struct {
     handle: vk.Buffer,
     memory: vk.DeviceMemory,
-    offset: vk.DeviceSize,
+    offset, size: vk.DeviceSize,
 }
 
-vulkan_create_buffer :: proc(device: vk.Device, memory_properties: ^vk.PhysicalDeviceMemoryProperties, create_info: ^vk.BufferCreateInfo, memory_property_flags: vk.MemoryPropertyFlags) -> (buffer: Vulkan_Buffer, res: vk.Result) {
+vulkan_create_buffer :: proc(using vulkan: ^Vulkan, create_info: ^vk.BufferCreateInfo, memory_property_flags: vk.MemoryPropertyFlags) -> (buffer: Vulkan_Buffer, res: vk.Result) {
     vk.CreateBuffer(device, create_info, nil, &buffer.handle) or_return
 
     memory_requirements: vk.MemoryRequirements
     vk.GetBufferMemoryRequirements(device, buffer.handle, &memory_requirements)
 
     memory_type_idx := -1
-    memory_types := memory_properties.memoryTypes[0:int(memory_properties.memoryTypeCount)]
+    memory_types := physical_device_memory_properties.memoryTypes[0:int(physical_device_memory_properties.memoryTypeCount)]
     for memory_type, idx in memory_types {
         if memory_property_flags <= memory_type.propertyFlags {
             memory_type_idx = idx
@@ -921,6 +815,25 @@ vulkan_create_buffer :: proc(device: vk.Device, memory_properties: ^vk.PhysicalD
     vk.AllocateMemory(device, &allocate_info, nil, &buffer.memory) or_return
 
     return
+}
+
+vulkan_map_memory_buffer :: proc(using vulkan: ^Vulkan, buffer: ^Vulkan_Buffer) -> (data: []byte, res: vk.Result) {
+    p: rawptr
+    res = vk.MapMemory(device, buffer.memory, buffer.offset, buffer.size - buffer.offset, &p)
+    data = transmute([]byte)mem.Raw_Slice{p, int(buffer.size - buffer.offset)}
+    return
+}
+
+vulkan_map_memory :: proc {
+    vulkan_map_memory_buffer,
+}
+
+vulkan_unmap_memory_buffer :: proc(using vulkan: ^Vulkan, buffer: ^Vulkan_Buffer) {
+    vk.UnmapMemory(device, buffer.memory)
+}
+
+vulkan_unmap_memory :: proc {
+    vulkan_unmap_memory_buffer,
 }
 
 main :: proc() {
@@ -965,6 +878,34 @@ main :: proc() {
         app_panic("Failed to create graphics pipeline!")
     } else {
         pipeline = p
+    }
+
+    Uniforms :: struct {
+        model: matrix[4, 4]f32,
+        view: matrix[4, 4]f32,
+        projection: matrix[4, 4]f32,
+    }
+
+    uniform_buffer: Vulkan_Buffer
+    if b, res := vulkan_create_buffer(&vulkan, &{
+        sType = .BUFFER_CREATE_INFO,
+        size = size_of(Uniforms),
+        usage = {.TRANSFER_DST, .UNIFORM_BUFFER},
+    }, {.DEVICE_LOCAL}); res != .SUCCESS {
+        app_panic("Failed to create uniform buffer.")
+    } else {
+        uniform_buffer = b
+    }
+
+    staging_buffer: Vulkan_Buffer
+    if b, res := vulkan_create_buffer(&vulkan, &{
+        sType = .BUFFER_CREATE_INFO,
+        size = size_of(Uniforms),
+        usage = {.TRANSFER_SRC},
+    }, {.HOST_VISIBLE, .HOST_COHERENT}); res != .SUCCESS {
+        app_panic("Failed to create staging buffer.")
+    } else {
+        staging_buffer = b
     }
 
     for app_update() {
@@ -1065,3 +1006,109 @@ when STACK_TRACE {
         runtime.trap()
     }
 }
+
+// vulkan_get_format_from_cgltf_component_type_and_cgltf_type :: #force_inline proc "contextless" (cgltf_component_type: cgltf.component_type, cgltf_type: cgltf.type) -> vk.Format {
+//     #partial switch cgltf_component_type {
+//         case .r_8:
+//             #partial switch cgltf_type {
+//                 case .scalar:
+//                     return .R8_SINT
+//                 case .vec2:
+//                     return .R8G8_SINT
+//                 case .vec3:
+//                     return .R8G8B8_SINT
+//                 case .vec4:
+//                     return .R8G8B8A8_SINT
+//             }
+//         case .r_8u:
+//             #partial switch cgltf_type {
+//                 case .scalar:
+//                     return .R8_UINT
+//                 case .vec2:
+//                     return .R8G8_UINT
+//                 case .vec3:
+//                     return .R8G8B8_UINT
+//                 case .vec4:
+//                     return .R8G8B8A8_UINT
+//             }
+//         case .r_16:
+//             #partial switch cgltf_type {
+//                 case .scalar:
+//                     return .R16_SINT
+//                 case .vec2:
+//                     return .R16G16_SINT
+//                 case .vec3:
+//                     return .R16G16B16_SINT
+//                 case .vec4:
+//                     return .R16G16B16A16_SINT
+//             }
+//         case .r_16u:
+//             #partial switch cgltf_type {
+//                 case .scalar:
+//                     return .R16_UINT
+//                 case .vec2:
+//                     return .R16G16_UINT
+//                 case .vec3:
+//                     return .R16G16B16_UINT
+//                 case .vec4:
+//                     return .R16G16B16A16_UINT
+//             }
+//         case .r_32u:
+//             #partial switch cgltf_type {
+//                 case .scalar:
+//                     return .R32_UINT
+//                 case .vec2:
+//                     return .R32G32_UINT
+//                 case .vec3:
+//                     return .R32G32B32_UINT
+//                 case .vec4:
+//                     return .R32G32B32A32_UINT
+//             }
+//         case .r_32f:
+//             #partial switch cgltf_type {
+//                 case .scalar:
+//                     return .R32_SFLOAT
+//                 case .vec2:
+//                     return .R32G32_SFLOAT
+//                 case .vec3:
+//                     return .R32G32B32_SFLOAT
+//                 case .vec4:
+//                     return .R32G32B32A32_SFLOAT
+//             }
+//     }
+
+//     return .UNDEFINED
+// }
+
+// vulkan_get_format :: proc{vulkan_get_format_from_cgltf_component_type_and_cgltf_type}
+
+// cgltf_load :: proc(name: string) -> (out_data: ^cgltf.data, res: cgltf.result) {
+//     file_data, ok := os.read_entire_file(name, context.temp_allocator)
+//     if !ok {
+//         res = .file_not_found
+//         return
+//     }
+
+//     alloc_proc :: proc "c" (user: rawptr, size: uint) -> rawptr {
+//         context = runtime.default_context()
+//         data := make([]byte, size, context.temp_allocator)
+//         return raw_data(data)
+//     }
+
+//     free_proc :: proc "c" (user: rawptr, ptr: rawptr) {
+
+//     }
+
+//     memory_options := cgltf.memory_options {
+//         alloc_func = alloc_proc,
+//         free_func = free_proc,
+//         user_data = nil,
+//     }
+
+//     options := cgltf.options {
+//         type = .glb,
+//         memory = memory_options,
+//     }
+
+//     return cgltf.parse(options, raw_data(file_data), len(file_data))
+// }

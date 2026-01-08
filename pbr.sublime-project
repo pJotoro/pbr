@@ -30,7 +30,7 @@
 			"name": "shader_debug",
 			"cmd": "glslang -V --target-env vulkan1.0 -C -Od -gVS $file -o build/debug/${file_base_name}_${file_extension}.spv",
 			"file_regex": "^(?:ERROR|WARNING):\\s+(.+?):(\\d+):",
-			"file_patterns": ["*.vert", "*.frag"]
+			"file_patterns": ["*.vert", "*.frag"],
 		},
 		{
 			"name": "shader_release",
