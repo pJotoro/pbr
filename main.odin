@@ -110,16 +110,23 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
     }
     
     api_version: u32
-    {
+    if desired_version == vk.API_VERSION_1_0 {
+        api_version = vk.API_VERSION_1_0
+    } else {
         if (vk.EnumerateInstanceVersion == nil) {
-            return .ERROR_INCOMPATIBLE_DRIVER
-        }
-        vk.EnumerateInstanceVersion(&api_version) or_return
-        if api_version < minimum_version {
-            return .ERROR_INCOMPATIBLE_DRIVER
-        }
-        if api_version > desired_version {
-            api_version = desired_version
+            if minimum_version > vk.API_VERSION_1_0 {
+                return .ERROR_INCOMPATIBLE_DRIVER
+            } else {
+                api_version = vk.API_VERSION_1_0
+            }
+        } else {
+            vk.EnumerateInstanceVersion(&api_version) or_return
+            if api_version < minimum_version {
+                return .ERROR_INCOMPATIBLE_DRIVER
+            }
+            if api_version > desired_version {
+                api_version = desired_version
+            }
         }
     }
 
