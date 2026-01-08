@@ -74,20 +74,22 @@ Vulkan :: struct {
     default_pipeline_layout: vk.PipelineLayout,
     default_pipeline_cache: vk.PipelineCache,
 
-    default_input_assembly_info: vk.PipelineInputAssemblyStateCreateInfo,
+    default_vertex_input_state: vk.PipelineVertexInputStateCreateInfo,
+
+    default_input_assembly_state: vk.PipelineInputAssemblyStateCreateInfo,
     
     default_viewport: vk.Viewport,
     default_scissor: vk.Rect2D,
-    default_viewport_info: vk.PipelineViewportStateCreateInfo,
+    default_viewport_state: vk.PipelineViewportStateCreateInfo,
     
-    default_rasterization_info: vk.PipelineRasterizationStateCreateInfo,
+    default_rasterization_state: vk.PipelineRasterizationStateCreateInfo,
 
-    default_multisample_info: vk.PipelineMultisampleStateCreateInfo,
+    default_multisample_state: vk.PipelineMultisampleStateCreateInfo,
 
-    default_color_blend_attachment_info: vk.PipelineColorBlendAttachmentState,
-    default_color_blend_info: vk.PipelineColorBlendStateCreateInfo,
+    default_color_blend_attachment_state: vk.PipelineColorBlendAttachmentState,
+    default_color_blend_state: vk.PipelineColorBlendStateCreateInfo,
 
-    default_dynamic_state_info: vk.PipelineDynamicStateCreateInfo,
+    default_dynamic_state: vk.PipelineDynamicStateCreateInfo,
 
     default_pipeline_info: vk.GraphicsPipelineCreateInfo,
 
@@ -522,7 +524,11 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
     vk.CreatePipelineLayout(device, &{sType = .PIPELINE_LAYOUT_CREATE_INFO}, nil, &default_pipeline_layout) or_return
     vk.CreatePipelineCache(device, &{sType = .PIPELINE_CACHE_CREATE_INFO}, nil, &default_pipeline_cache) or_return
 
-    default_input_assembly_info = vk.PipelineInputAssemblyStateCreateInfo {
+    default_vertex_input_state = vk.PipelineVertexInputStateCreateInfo {
+        sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+    }
+
+    default_input_assembly_state = vk.PipelineInputAssemblyStateCreateInfo {
         sType = .PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
         topology = .TRIANGLE_LIST,
     }
@@ -535,7 +541,7 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
     default_scissor = vk.Rect2D {
         extent = swapchain_extent,
     }
-    default_viewport_info = vk.PipelineViewportStateCreateInfo {
+    default_viewport_state = vk.PipelineViewportStateCreateInfo {
         sType = .PIPELINE_VIEWPORT_STATE_CREATE_INFO,
         viewportCount = 1,
         pViewports = &default_viewport,
@@ -543,7 +549,7 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
         pScissors = &default_scissor,
     }
 
-    default_rasterization_info = vk.PipelineRasterizationStateCreateInfo {
+    default_rasterization_state = vk.PipelineRasterizationStateCreateInfo {
         sType = .PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
         polygonMode = .FILL,
         cullMode = {.BACK},
@@ -551,33 +557,33 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
         lineWidth = 1.0,
     }
 
-    default_multisample_info = vk.PipelineMultisampleStateCreateInfo {
+    default_multisample_state = vk.PipelineMultisampleStateCreateInfo {
         sType = .PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
         rasterizationSamples = {._1},
     }
 
-    default_color_blend_attachment_info = vk.PipelineColorBlendAttachmentState {
+    default_color_blend_attachment_state = vk.PipelineColorBlendAttachmentState {
         colorWriteMask = {.R, .G, .B, .A},
     }
-    default_color_blend_info = vk.PipelineColorBlendStateCreateInfo {
+    default_color_blend_state = vk.PipelineColorBlendStateCreateInfo {
         sType = .PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
         attachmentCount = 1,
-        pAttachments = &default_color_blend_attachment_info,
+        pAttachments = &default_color_blend_attachment_state,
     }
 
-    default_dynamic_state_info = vk.PipelineDynamicStateCreateInfo {
+    default_dynamic_state = vk.PipelineDynamicStateCreateInfo {
         sType = .PIPELINE_DYNAMIC_STATE_CREATE_INFO,
     }
 
     default_pipeline_info = vk.GraphicsPipelineCreateInfo {
         sType = .GRAPHICS_PIPELINE_CREATE_INFO,
         flags = {},
-        pInputAssemblyState = &default_input_assembly_info,
-        pViewportState = &default_viewport_info,
-        pRasterizationState = &default_rasterization_info,
-        pMultisampleState = &default_multisample_info,
-        pColorBlendState = &default_color_blend_info,
-        pDynamicState = &default_dynamic_state_info,
+        pInputAssemblyState = &default_input_assembly_state,
+        pViewportState = &default_viewport_state,
+        pRasterizationState = &default_rasterization_state,
+        pMultisampleState = &default_multisample_state,
+        pColorBlendState = &default_color_blend_state,
+        pDynamicState = &default_dynamic_state,
         layout = default_pipeline_layout,
         renderPass = render_pass,
     }
@@ -714,17 +720,39 @@ vulkan_init :: proc(using vulkan: ^Vulkan) -> vk.Result {
     return .SUCCESS
 }
 
-vulkan_create_graphics_pipeline_with_defaults :: proc(using vulkan: ^Vulkan, shader_stages: []vk.PipelineShaderStageCreateInfo, vertex_input: ^vk.PipelineVertexInputStateCreateInfo) -> (pipeline: vk.Pipeline, res: vk.Result) {
+vulkan_create_graphics_pipeline :: proc(
+    using vulkan: ^Vulkan, 
+    
+    shader_stages: []vk.PipelineShaderStageCreateInfo, 
+    
+    vertex_input_state:     ^vk.PipelineVertexInputStateCreateInfo      = nil,
+    input_assembly_state:   ^vk.PipelineInputAssemblyStateCreateInfo    = nil,
+    viewport_state:         ^vk.PipelineViewportStateCreateInfo         = nil,
+    rasterization_state:    ^vk.PipelineRasterizationStateCreateInfo    = nil,
+    multisample_state:      ^vk.PipelineMultisampleStateCreateInfo      = nil,
+    color_blend_state:      ^vk.PipelineColorBlendStateCreateInfo       = nil,
+    dynamic_state:          ^vk.PipelineDynamicStateCreateInfo          = nil,
+    
+    pipeline_layout: vk.PipelineLayout = {}) -> (pipeline: vk.Pipeline, res: vk.Result) 
+{
     pipeline_info := default_pipeline_info
+
     pipeline_info.stageCount = u32(len(shader_stages))
     pipeline_info.pStages = raw_data(shader_stages)
-    pipeline_info.pVertexInputState = vertex_input
+
+    pipeline_info.pVertexInputState = vertex_input_state if vertex_input_state != nil else &default_vertex_input_state
+    pipeline_info.pInputAssemblyState = input_assembly_state if input_assembly_state != nil else &default_input_assembly_state
+    pipeline_info.pViewportState = viewport_state if viewport_state != nil else &default_viewport_state
+    pipeline_info.pRasterizationState = rasterization_state if rasterization_state != nil else &default_rasterization_state
+    pipeline_info.pMultisampleState = multisample_state if multisample_state != nil else &default_multisample_state
+    pipeline_info.pColorBlendState = color_blend_state if color_blend_state != nil else &default_color_blend_state
+    pipeline_info.pDynamicState = dynamic_state if dynamic_state != nil else &default_dynamic_state
+
+    pipeline_info.layout = pipeline_layout if pipeline_layout != {} else default_pipeline_layout
 
     res = vk.CreateGraphicsPipelines(device, default_pipeline_cache, 1, &pipeline_info, nil, &pipeline)
     return
 }
-
-vulkan_create_graphics_pipeline :: proc {vulkan_create_graphics_pipeline_with_defaults}
 
 // TODO: vulkan_create_graphics_pipelines
 
@@ -819,7 +847,7 @@ vulkan_create_buffer :: proc(using vulkan: ^Vulkan, create_info: ^vk.BufferCreat
 
 vulkan_map_memory_buffer :: proc(using vulkan: ^Vulkan, buffer: ^Vulkan_Buffer) -> (data: []byte, res: vk.Result) {
     p: rawptr
-    res = vk.MapMemory(device, buffer.memory, buffer.offset, buffer.size - buffer.offset, &p)
+    res = vk.MapMemory(device, buffer.memory, buffer.offset, buffer.size - buffer.offset, {}, &p)
     data = transmute([]byte)mem.Raw_Slice{p, int(buffer.size - buffer.offset)}
     return
 }
@@ -869,12 +897,9 @@ main :: proc() {
         vert,
         frag,
     }
-    vertex_input := vk.PipelineVertexInputStateCreateInfo {
-        sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-    }
 
     pipeline: vk.Pipeline
-    if p, res := vulkan_create_graphics_pipeline(&vulkan, shader_stages, &vertex_input); res != .SUCCESS {
+    if p, res := vulkan_create_graphics_pipeline(&vulkan, shader_stages); res != .SUCCESS {
         app_panic("Failed to create graphics pipeline!")
     } else {
         pipeline = p
