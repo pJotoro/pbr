@@ -323,7 +323,7 @@ main :: proc() {
                 firstSet = 0, descriptorSetCount = 1, pDescriptorSets = &descriptor_sets[vulkan.frame_idx],
                 dynamicOffsetCount = 0, pDynamicOffsets = nil)
             vk.CmdDraw(commandBuffer = cb,
-                vertexCount = 6, instanceCount = 1,
+                vertexCount = 36, instanceCount = 1,
                 firstVertex = 0, firstInstance = 0)
         }
         vulkan_end_rendering(&vulkan)
