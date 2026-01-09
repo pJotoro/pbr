@@ -23,7 +23,7 @@
 		},
 		{
 			"name": "release",
-			"cmd": "odin build . -out:build/release/pbr.exe -subsystem:windows -target-features:avx2 -disable-assert -no-bounds-check -no-crt -o:aggressive",
+			"cmd": "odin build . -out:build/release/pbr.exe -subsystem:windows -target-features:avx2 -o:aggressive -disable-assert -no-bounds-check",
 			"file_regex":  "^(.+)\\(([0-9]+):([0-9]+)\\) (.+)$",
 		},
 		{

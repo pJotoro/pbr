@@ -6,6 +6,8 @@ import "base:intrinsics"
 import "base:runtime"
 import "core:strings"
 
+foreign import user32 "system:User32.lib"
+
 VULKAN_LIB_NAME :: "vulkan-1.dll"
 VK_KHR_platform_surface :: "VK_KHR_win32_surface"
 
@@ -17,7 +19,12 @@ ctx: struct {
 	instance: win32.HINSTANCE,
 	window: win32.HWND,
 	window_class: win32.WNDCLASSEXW,
+    monitor: win32.HMONITOR,
 	running: bool,
+}
+
+win32_get_monitor :: proc() -> win32.HMONITOR {
+    return ctx.monitor
 }
 
 @(private="file")
@@ -65,9 +72,9 @@ _app_init :: proc() -> (w, h: int, refresh_rate: int, ok: bool) {
     }
     
     {
-        monitor := win32.MonitorFromPoint({0, 0}, .MONITOR_DEFAULTTOPRIMARY)
+        ctx.monitor = win32.MonitorFromPoint({0, 0}, .MONITOR_DEFAULTTOPRIMARY)
         monitor_info := win32.MONITORINFO{cbSize = size_of(win32.MONITORINFO)}
-        if res := win32.GetMonitorInfoW(monitor, &monitor_info); !res {
+        if res := win32.GetMonitorInfoW(ctx.monitor, &monitor_info); !res {
             return
         }
         w = int(monitor_info.rcMonitor.right - monitor_info.rcMonitor.left)
@@ -87,7 +94,7 @@ _app_init :: proc() -> (w, h: int, refresh_rate: int, ok: bool) {
         nWidth = i32(w), 
         nHeight = i32(h),
         
-        hWndParent = nil, 
+        hWndParent = nil,
         hMenu = nil,
         hInstance = win32.HANDLE(ctx.instance), 
         
@@ -157,4 +164,13 @@ app_panic :: proc(text: string, loc := #caller_location) {
     text_wstring := win32.utf8_to_wstring(text)
     win32.MessageBoxExW(ctx.window, text_wstring, nil, win32.MB_OK|win32.MB_ICONERROR|win32.MB_TOPMOST, 0)
     panic(text, loc)
+}
+
+debug_print_cstring :: proc "contextless" (s: cstring) {
+    win32.OutputDebugStringA(s)
+}
+
+debug_print_byte :: proc "contextless" (b: byte) {
+    bytes := [?]byte { b, 0 }
+    win32.OutputDebugStringA(cstring(raw_data(bytes[:])))
 }

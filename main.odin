@@ -6,9 +6,12 @@ import "core:dynlib"
 import "core:mem"
 import vk "vendor:vulkan"
 import "core:debug/trace"
+import "core:slice"
 // import "vendor:cgltf"
 // import "core:os"
 // import "core:fmt"
+
+APP_TOPMOST :: #config(APP_TOPMOST, !ODIN_DEBUG)
 
 VULKAN_DEBUG :: #config(VULKAN_DEBUG, ODIN_DEBUG)
 VULKAN_VALIDATION :: #config(VULKAN_VALIDATION, VULKAN_DEBUG)
@@ -32,7 +35,7 @@ Vulkan :: struct {
 
     instance: vk.Instance,
     instance_layer_properties: []vk.LayerProperties,
-    instance_extension_properties: []vk.ExtensionProperties,
+    instance_extensions: [dynamic]cstring,
 
     physical_device: vk.PhysicalDevice,
     physical_device_memory_properties: vk.PhysicalDeviceMemoryProperties,
@@ -46,7 +49,7 @@ Vulkan :: struct {
     surface_formats: []vk.SurfaceFormatKHR,
 
     device: vk.Device,
-    device_extension_properties: []vk.ExtensionProperties,
+    device_extensions: [dynamic]cstring,
     
     queue_family_properties: []vk.QueueFamilyProperties,
     queues: []vk.Queue,
@@ -137,15 +140,6 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
         }
     }
 
-    instance_extensions := make([dynamic]cstring, 0, 4, context.temp_allocator)
-    append(&instance_extensions, cstring("VK_KHR_surface"), VK_KHR_platform_surface)
-    when VULKAN_DEBUG_UTILS {
-        append(&instance_extensions, "VK_EXT_debug_utils")
-    }
-    when VULKAN_LAYERS {
-        append(&instance_extensions, "VK_EXT_layer_settings")
-    }
-
     when VULKAN_LAYERS {
         instance_layer_count: u32
         vk.EnumerateInstanceLayerProperties(&instance_layer_count, nil) or_return
@@ -175,7 +169,7 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
             instance_extension_count += count
 
         }
-        instance_extension_properties = make([]vk.ExtensionProperties, instance_extension_count, arena)
+        instance_extension_properties := make([]vk.ExtensionProperties, instance_extension_count, context.temp_allocator)
         
         cur_instance_extension_properties := instance_extension_properties
         {
@@ -191,8 +185,21 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
     } else {
         instance_extension_count: u32
         vk.EnumerateInstanceExtensionProperties(nil, &instance_extension_count, nil) or_return
-        instance_extension_properties = make([]vk.ExtensionProperties, instance_extension_count, arena)
+        instance_extension_properties := make([]vk.ExtensionProperties, instance_extension_count, arena)
         vk.EnumerateInstanceExtensionProperties(nil, &instance_extension_count, raw_data(instance_extension_properties)) or_return
+    }
+
+    desired_instance_extensions := [?]cstring {
+        "VK_KHR_get_surface_capabilities2",
+    }
+
+    instance_extensions = make([dynamic]cstring, 0, 4 + len(desired_instance_extensions), arena)
+    append(&instance_extensions, cstring("VK_KHR_surface"), VK_KHR_platform_surface)
+    when VULKAN_DEBUG_UTILS {
+        append(&instance_extensions, "VK_EXT_debug_utils")
+    }
+    when VULKAN_LAYERS {
+        append(&instance_extensions, "VK_EXT_layer_settings")
     }
 
     for extension in instance_extensions {
@@ -205,6 +212,15 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
         }
         if !found {
             return .ERROR_EXTENSION_NOT_PRESENT
+        }
+    }
+
+    for extension in desired_instance_extensions {
+        for &props in instance_extension_properties {
+            if extension == cstring(raw_data(props.extensionName[:])) {
+                append(&instance_extensions, extension)
+                break
+            }
         }
     }
 
@@ -403,8 +419,66 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
         }
     }
 
-    device_extensions := [?]cstring {
+    when VULKAN_LAYERS {
+        device_extension_count: u32
+        vk.EnumerateDeviceExtensionProperties(physical_device, nil, &device_extension_count, nil) or_return
+        for instance_layer in instance_layers {
+            count: u32
+            vk.EnumerateDeviceExtensionProperties(physical_device, instance_layer, &count, nil) or_return
+            device_extension_count += count
+
+        }
+        device_extension_properties := make([]vk.ExtensionProperties, device_extension_count, context.temp_allocator)
+        
+        cur_device_extension_properties := device_extension_properties
+        {
+            count := u32(len(cur_device_extension_properties))
+            vk.EnumerateDeviceExtensionProperties(physical_device, nil, &count, raw_data(cur_device_extension_properties)) or_return
+            cur_device_extension_properties = cur_device_extension_properties[int(count):]
+        }
+        for instance_layer in instance_layers {
+            count := u32(len(cur_device_extension_properties))
+            vk.EnumerateDeviceExtensionProperties(physical_device, instance_layer, &count, raw_data(cur_device_extension_properties)) or_return
+            cur_device_extension_properties = cur_device_extension_properties[int(count):]
+        }
+    } else {
+        device_extension_count: u32
+        vk.EnumerateDeviceExtensionProperties(physical_device, nil, &device_extension_count, nil) or_return
+        device_extension_properties := make([]vk.ExtensionProperties, device_extension_count, context.temp_allocator)
+        vk.EnumerateDeviceExtensionProperties(physical_device, nil, &device_extension_count, raw_data(device_extension_properties)) or_return
+    }
+
+    required_device_extensions := [?]cstring {
         "VK_KHR_swapchain",
+    }
+
+    for extension in required_device_extensions {
+        found := false
+        for &props in device_extension_properties {
+            if extension == cstring(raw_data(props.extensionName[:])) {
+                found = true
+                break
+            }
+        }
+        if !found {
+            return .ERROR_EXTENSION_NOT_PRESENT
+        }
+    }
+
+    desired_device_extensions := [?]cstring {
+        "VK_EXT_full_screen_exclusive",
+    }
+
+    device_extensions = make([dynamic]cstring, 0, len(required_device_extensions) + len(desired_device_extensions), arena)
+    append(&device_extensions, ..required_device_extensions[:])
+
+    for extension in desired_device_extensions {
+        for &props in device_extension_properties {
+            if extension == cstring(raw_data(props.extensionName[:])) {
+                append(&device_extensions, extension)
+                break
+            }
+        }
     }
 
     vk.CreateDevice(physical_device, &{
@@ -432,20 +506,44 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
 
     swapchain_format = surface_formats[0] // TODO
     swapchain_extent = surface_capabilities.currentExtent
-    vk.CreateSwapchainKHR(device, &{
-        sType = .SWAPCHAIN_CREATE_INFO_KHR,
-        surface = surface,
-        minImageCount = surface_capabilities.minImageCount, // TODO
-        imageFormat = swapchain_format.format,
-        imageColorSpace = swapchain_format.colorSpace,
-        imageExtent = swapchain_extent,
-        imageArrayLayers = 1,
-        imageUsage = {.COLOR_ATTACHMENT},
-        preTransform = surface_capabilities.currentTransform,
-        compositeAlpha = {.OPAQUE},
-        presentMode = .FIFO, // TODO
-        clipped = true,
-    }, nil, &swapchain) or_return
+
+    {
+        info := vk.SwapchainCreateInfoKHR {
+            sType = .SWAPCHAIN_CREATE_INFO_KHR,
+            surface = surface,
+            minImageCount = surface_capabilities.minImageCount, // TODO
+            imageFormat = swapchain_format.format,
+            imageColorSpace = swapchain_format.colorSpace,
+            imageExtent = swapchain_extent,
+            imageArrayLayers = 1,
+            imageUsage = {.COLOR_ATTACHMENT},
+            preTransform = surface_capabilities.currentTransform,
+            compositeAlpha = {.OPAQUE},
+            presentMode = .FIFO, // TODO
+            clipped = true,
+        }
+
+        full_screen_info := vk.SurfaceFullScreenExclusiveInfoEXT {
+            sType = .SURFACE_FULL_SCREEN_EXCLUSIVE_INFO_EXT,
+            fullScreenExclusive = .DEFAULT,
+        }
+
+        when ODIN_OS == .Windows {
+            win32_full_screen_info := vk.SurfaceFullScreenExclusiveWin32InfoEXT {
+                sType = .SURFACE_FULL_SCREEN_EXCLUSIVE_WIN32_INFO_EXT,
+                hmonitor = win32_get_monitor(),
+            }
+        }
+
+        if slice.contains(device_extensions[:], "VK_EXT_full_screen_exclusive") {
+            info.pNext = &full_screen_info
+            when ODIN_OS == .Windows {
+                full_screen_info.pNext = &win32_full_screen_info
+            }
+        }
+
+        vk.CreateSwapchainKHR(device, &info, nil, &swapchain) or_return
+    }
 
     {
         count: u32
@@ -992,8 +1090,7 @@ vulkan_destroy_shader_stage :: proc(device: vk.Device, shader_stage: vk.Pipeline
 when VULKAN_DEBUG_UTILS {
     vulkan_debug_callback :: proc "system" (severity: vk.DebugUtilsMessageSeverityFlagsEXT, types: vk.DebugUtilsMessageTypeFlagsEXT, data: ^vk.DebugUtilsMessengerCallbackDataEXT, user_data: rawptr) -> b32
     {
-        runtime.print_string(string(data.pMessage))
-        runtime.print_byte('\n')
+        debug_print_cstring(data.pMessage)
         return false
     }
 }
