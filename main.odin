@@ -5,7 +5,6 @@ import "core:mem"
 import vk "vendor:vulkan"
 import "core:debug/trace"
 import "core:math/linalg"
-import "core:time"
 
 APP_TOPMOST :: #config(APP_TOPMOST, !ODIN_DEBUG)
 
@@ -181,8 +180,6 @@ main :: proc() {
         pipeline = p
     }
 
-    tick := time.tick_now()
-
     for app_update() {
         cb: vk.CommandBuffer
         if command_buffer, res := vulkan_begin_rendering_commands(&vulkan); res != .SUCCESS {
@@ -191,9 +188,8 @@ main :: proc() {
             cb = command_buffer
         }
 
-        dt := 1.0/f32(time.tick_lap_time(&tick))
         @static bruh := f32(0.0)
-        bruh += dt*100000.0
+        bruh += dt
 
         u.model = linalg.matrix4_rotate(-bruh, Vector3{0.0, 1.0, 0.0})
         u.view = linalg.matrix4_translate(Vector3{0.0, 0.0, -3.0})
