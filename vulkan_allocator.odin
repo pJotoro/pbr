@@ -16,16 +16,21 @@ Vulkan_Unallocated_Image :: struct {
 	memory_properties_include, memory_properties_exclude: vk.MemoryPropertyFlags,
 }
 
+Vulkan_Allocation :: struct {
+	memory: vk.DeviceMemory,
+	offset: vk.DeviceSize,
+}
+
 Vulkan_Allocator :: struct {
-	buffer_allocations: map[vk.Buffer]vk.DeviceMemory,
-	image_allocations: map[vk.Image]vk.DeviceMemory,
+	buffer_allocations: map[vk.Buffer]Vulkan_Allocation,
+	image_allocations: map[vk.Image]Vulkan_Allocation,
 	unallocated_buffers: [dynamic]Vulkan_Unallocated_Buffer,
 	unallocated_images: [dynamic]Vulkan_Unallocated_Image,
 }
 
 vulkan_create_allocator :: proc() -> (allocator: Vulkan_Allocator) {
-	allocator.buffer_allocations = make(map[vk.Buffer]vk.DeviceMemory)
-	allocator.image_allocations = make(map[vk.Image]vk.DeviceMemory)
+	allocator.buffer_allocations = make(map[vk.Buffer]Vulkan_Allocation)
+	allocator.image_allocations = make(map[vk.Image]Vulkan_Allocation)
 	allocator.unallocated_buffers = make([dynamic]Vulkan_Unallocated_Buffer)
 	allocator.unallocated_images = make([dynamic]Vulkan_Unallocated_Image)
 	return
@@ -131,7 +136,7 @@ vulkan_alloc :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator) 
 
 			memory: vk.DeviceMemory = ---
 			vk.AllocateMemory(device, &memory_allocate_info, nil, &memory) or_return
-			buffer_allocations[unallocated_buffers[buffer_index].buffer] = memory
+			buffer_allocations[unallocated_buffers[buffer_index].buffer] = {memory, 0}
 
 			bind_buffer_memory_info := vk.BindBufferMemoryInfo{
 				sType = .BIND_BUFFER_MEMORY_INFO,
@@ -186,7 +191,7 @@ vulkan_alloc :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator) 
 
 			memory: vk.DeviceMemory = ---
 			vk.AllocateMemory(device, &memory_allocate_info, nil, &memory) or_return
-			image_allocations[unallocated_images[image_index].image] = memory
+			image_allocations[unallocated_images[image_index].image] = {memory, 0}
 
 			bind_image_memory_info := vk.BindImageMemoryInfo{
 				sType = .BIND_IMAGE_MEMORY_INFO,
@@ -305,13 +310,13 @@ vulkan_alloc :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator) 
 		if bind_buffer_memory_info_start_index != len(bind_buffer_memory_infos) {
 			for &b in bind_buffer_memory_infos[bind_buffer_memory_info_start_index:] {
 				b.memory = memory
-				buffer_allocations[b.buffer] = memory
+				buffer_allocations[b.buffer] = {memory, b.memoryOffset}
 			}
 		}
 		if bind_image_memory_info_start_index != len(bind_image_memory_infos) {
 			for &b in bind_image_memory_infos[bind_image_memory_info_start_index:] {
 				b.memory = memory
-				image_allocations[b.image] = memory
+				image_allocations[b.image] = {memory, b.memoryOffset}
 			}
 		}
 	}
@@ -329,40 +334,34 @@ vulkan_alloc :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator) 
 	return .SUCCESS
 }
 
-vulkan_free_buffer :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, buffer: vk.Buffer) -> (ok: bool) {
-	memory: vk.DeviceMemory = ---
-	memory, ok = buffer_allocations[buffer]
-	if !ok do return
+vulkan_free_buffer :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, buffer: vk.Buffer, loc := #caller_location) {
+	buffer_allocations_len := len(buffer_allocations)
+	if buffer_allocations_len == 0 {
+		return
+	}
+
+	allocation := vulkan_get_allocation(allocator, buffer)
 	delete_key(&buffer_allocations, buffer)
 
-	vk.DestroyBuffer(device, buffer, nil)
-
-	for key, value in buffer_allocations {
-		if value == memory do return
+	if buffer_allocations_len == 1 {
+		vk.FreeMemory(device, allocation.memory, nil)
 	}
-	for key, value in image_allocations {
-		if value == memory do return
-	}
-	vk.FreeMemory(device, memory, nil)
 
 	return
 }
 
-vulkan_free_image :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, image: vk.Image) -> (ok: bool) {
-	memory: vk.DeviceMemory = ---
-	memory, ok = image_allocations[image]
-	if !ok do return
+vulkan_free_image :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, image: vk.Image) {
+	image_allocations_len := len(image_allocations)
+	if image_allocations_len == 0 {
+		return
+	}
+
+	allocation := vulkan_get_allocation(allocator, image)	
 	delete_key(&image_allocations, image)
 
-	vk.DestroyImage(device, image, nil)
-
-	for key, value in buffer_allocations {
-		if value == memory do return
+	if image_allocations_len == 1 {
+		vk.FreeMemory(device, allocation.memory, nil)
 	}
-	for key, value in image_allocations {
-		if value == memory do return
-	}
-	vk.FreeMemory(device, memory, nil)
 
 	return
 }
@@ -389,48 +388,48 @@ align_forward_device_size :: #force_inline proc(ptr, align: vk.DeviceSize) -> vk
 	return p
 }
 
-vulkan_get_memory_buffer :: proc "contextless" (using allocator: ^Vulkan_Allocator, buffer: vk.Buffer) -> (memory: vk.DeviceMemory, ok: bool) {
-	memory, ok = buffer_allocations[buffer]
+vulkan_get_allocation_buffer :: proc(using allocator: ^Vulkan_Allocator, buffer: vk.Buffer) -> (allocation: Vulkan_Allocation) {
+	ok: bool
+	allocation, ok = buffer_allocations[buffer]
+	assert(ok)
 	return
 }
 
-vulkan_get_memory_image :: proc "contextless" (using allocator: ^Vulkan_Allocator, image: vk.Image) -> (memory: vk.DeviceMemory, ok: bool) {
-	memory, ok = image_allocations[image]
+vulkan_get_allocation_image :: proc(using allocator: ^Vulkan_Allocator, image: vk.Image) -> (allocation: Vulkan_Allocation) {
+	ok: bool
+	allocation, ok = image_allocations[image]
+	assert(ok)
 	return
 }
 
-vulkan_get_memory :: proc{vulkan_get_memory_buffer, vulkan_get_memory_image}
+vulkan_get_allocation :: proc{vulkan_get_allocation_buffer, vulkan_get_allocation_image}
 
-vulkan_map_memory_buffer :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, buffer: vk.Buffer, offset, size: vk.DeviceSize, loc := #caller_location) -> (data: []byte, result: vk.Result) {
-	memory, ok := vulkan_get_memory(allocator, buffer)
-	assert(ok, "Failed to get buffer memory", loc)
+vulkan_map_memory_buffer :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, buffer: vk.Buffer, offset, size: vk.DeviceSize) -> (data: []byte, result: vk.Result) {
+	allocation := vulkan_get_allocation(allocator, buffer)
 	raw := mem.Raw_Slice{len = int(size)}
-	result = vk.MapMemory(device, memory, offset, size, {}, &raw.data)
+	result = vk.MapMemory(device, allocation.memory, allocation.offset + offset, size, {}, &raw.data)
 	data = transmute([]byte)raw
 	return
 }
 
-vulkan_map_memory_image :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, image: vk.Image, offset, size: vk.DeviceSize, loc := #caller_location) -> (data: []byte, result: vk.Result) {
-	memory, ok := vulkan_get_memory(allocator, image)
-	assert(ok, "Failed to get image memory", loc)
+vulkan_map_memory_image :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, image: vk.Image, offset, size: vk.DeviceSize) -> (data: []byte, result: vk.Result) {
+	allocation := vulkan_get_allocation(allocator, image)
 	raw := mem.Raw_Slice{len = int(size)}
-	result = vk.MapMemory(device, memory, offset, size, {}, &raw.data)
+	result = vk.MapMemory(device, allocation.memory, allocation.offset + offset, size, {}, &raw.data)
 	data = transmute([]byte)raw
 	return
 }
 
 vulkan_map_memory :: proc{vulkan_map_memory_buffer, vulkan_map_memory_image}
 
-vulkan_unmap_memory_buffer :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, buffer: vk.Buffer, loc := #caller_location) {
-	memory, ok := vulkan_get_memory(allocator, buffer)
-	assert(ok, "Failed to get buffer memory", loc)
-	vk.UnmapMemory(device, memory)
+vulkan_unmap_memory_buffer :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, buffer: vk.Buffer) {
+	allocation := vulkan_get_allocation(allocator, buffer)
+	vk.UnmapMemory(device, allocation.memory)
 }
 
-vulkan_unmap_memory_image :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, image: vk.Image, loc := #caller_location) {
-	memory, ok := vulkan_get_memory(allocator, image)
-	assert(ok, "Failed to get image memory", loc)
-	vk.UnmapMemory(device, memory)
+vulkan_unmap_memory_image :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, image: vk.Image) {
+	allocation := vulkan_get_allocation(allocator, image)
+	vk.UnmapMemory(device, allocation.memory)
 }
 
 vulkan_unmap_memory :: proc{vulkan_unmap_memory_buffer, vulkan_unmap_memory_image}
