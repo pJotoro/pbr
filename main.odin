@@ -32,7 +32,7 @@ main :: proc() {
     vulkan: Vulkan
     vulkan.arena = mem.arena_allocator(&{data = make([]byte, mem.Megabyte)})
     if res := vulkan_init(&vulkan, vk.API_VERSION_1_1, vk.API_VERSION_1_1); res != .SUCCESS {
-        panic("Your graphics driver is out of date.")
+        panic("An unexpected failure occurred.")
     }
 
     // Uniforms :: struct {
@@ -170,17 +170,17 @@ main :: proc() {
     //     }
     // }
 
-    model := vulkan_load_cgltf(&vulkan, &vulkan_allocator)
+    // model := vulkan_load_cgltf(&vulkan, &vulkan_allocator)
 
-    if res := vulkan_alloc(&vulkan, &vulkan_allocator); res != .SUCCESS {
-        panic("Ran out of GPU memory.")
-    }
+    // if res := vulkan_alloc(&vulkan, &vulkan_allocator); res != .SUCCESS {
+    //     panic("Ran out of GPU memory.")
+    // }
 
-    {
-        data := vulkan_map_memory(&vulkan, &vulkan_allocator, model.staging_buffer, 0, len(model.staging_buffer_data))
-        copy_slice(data, transmute([]byte)mem.Raw_Slice{&u, size_of(Uniforms)})
-        vulkan_unmap_memory(&vulkan, &vulkan_allocator, staging_buffer)
-    }
+    // {
+    //     data := vulkan_map_memory(&vulkan, &vulkan_allocator, model.staging_buffer, 0, len(model.staging_buffer_data))
+    //     copy_slice(data, transmute([]byte)mem.Raw_Slice{&u, size_of(Uniforms)})
+    //     vulkan_unmap_memory(&vulkan, &vulkan_allocator, staging_buffer)
+    // }
 
     Instance :: struct {
         translation: Vector3,

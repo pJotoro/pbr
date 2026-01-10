@@ -3,6 +3,7 @@ package pbr
 import "core:dynlib"
 import "core:mem"
 import "core:slice"
+import "core:fmt"
 
 import vk "vendor:vulkan"
 
@@ -222,12 +223,27 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
     {
         did_load: bool
         if lib, did_load = dynlib.load_library(VULKAN_LIB_NAME); !did_load {
-            return .ERROR_INCOMPATIBLE_DRIVER 
+            panic("Your system does not support Vulkan.")
         }
     }
     {
         vkGetInstanceProcAddr := dynlib.symbol_address(lib, "vkGetInstanceProcAddr")
         vk.load_proc_addresses_global(vkGetInstanceProcAddr)
+    }
+
+    api_version_to_string :: #force_inline proc "contextless" (api_version: u32) -> string {
+        switch api_version {
+            case vk.API_VERSION_1_0:
+                return "1.0"
+            case vk.API_VERSION_1_1:
+                return "1.1"
+            case vk.API_VERSION_1_2:
+                return "1.2"
+            case vk.API_VERSION_1_3:
+                return "1.3"
+            case vk.API_VERSION_1_4:
+                return "1.4"
+        }
     }
     
     api_version: u32
@@ -236,14 +252,15 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
     } else {
         if (vk.EnumerateInstanceVersion == nil) {
             if minimum_version > vk.API_VERSION_1_0 {
-                return .ERROR_INCOMPATIBLE_DRIVER
+                fmt.panicf("Your system only supports Vulkan 1.0, but at least Vulkan %v is required", api_version_to_string(minimum_version))
             } else {
                 api_version = vk.API_VERSION_1_0
             }
         } else {
             vk.EnumerateInstanceVersion(&api_version) or_return
             if api_version < minimum_version {
-                return .ERROR_INCOMPATIBLE_DRIVER
+                fmt.panicf("Your system only supports Vulkan %v, but at least Vulkan %v is required", 
+                    api_version_to_string(api_version), api_version_to_string(minimum_version))
             }
             if api_version > desired_version {
                 api_version = desired_version
@@ -320,6 +337,7 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
         append(&instance_extensions, "VK_EXT_layer_settings")
     }
 
+    missing_instance_extensions := make([dynamic]cstring, 0, len(instance_extensions), context.temp_allocator)
     for extension in instance_extensions {
         found := false
         for &props in instance_extension_properties {
@@ -329,8 +347,11 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
             }
         }
         if !found {
-            return .ERROR_EXTENSION_NOT_PRESENT
+            append(&missing_instance_extensions, extension)
         }
+    }
+    if len(missing_instance_extensions) > 0 {
+        fmt.panicf("Your system is missing these instance extensions: %v", missing_instance_extensions)
     }
 
     for extension in desired_instance_extensions {
@@ -570,6 +591,7 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
         "VK_KHR_swapchain",
     }
 
+    missing_device_extensions := make([dynamic]cstring, 0, len(required_device_extensions), context.temp_allocator)
     for extension in required_device_extensions {
         found := false
         for &props in device_extension_properties {
@@ -579,8 +601,11 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
             }
         }
         if !found {
-            return .ERROR_EXTENSION_NOT_PRESENT
+            append(&missing_device_extensions, extension)
         }
+    }
+    if len(missing_device_extensions) > 0 {
+        fmt.panicf("Your system is missing these device extensions: %v", missing_device_extensions)
     }
 
     desired_device_extensions := [?]cstring {
