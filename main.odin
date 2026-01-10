@@ -44,22 +44,18 @@ main :: proc() {
 
     vulkan_allocator := vulkan_create_allocator()
 
-    uniform_buffers := make([]vk.Buffer, len(vulkan.frames))
-    for &uniform_buffer in uniform_buffers {
-        if b, res := vulkan_create_buffer(&vulkan, &vulkan_allocator, size_of(Uniforms), {.TRANSFER_DST, .UNIFORM_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE}); res != .SUCCESS {
-            app_panic("Failed to create uniform buffer.")
-        } else {
-            uniform_buffer = b
-        }
+    uniform_buffer: vk.Buffer
+    if b, res := vulkan_create_buffer(&vulkan, &vulkan_allocator, size_of(Uniforms), {.TRANSFER_DST, .UNIFORM_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE}); res != .SUCCESS {
+        app_panic("Failed to create uniform buffer.")
+    } else {
+        uniform_buffer = b
     }
 
-    staging_buffers := make([]vk.Buffer, len(vulkan.frames))
-    for &staging_buffer in staging_buffers {
-        if b, res := vulkan_create_buffer(&vulkan, &vulkan_allocator, size_of(Uniforms), {.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT}, {.DEVICE_LOCAL}); res != .SUCCESS {
-            app_panic("Failed to create staging buffer.")
-        } else {
-            staging_buffer = b
-        }
+    staging_buffer: vk.Buffer
+    if b, res := vulkan_create_buffer(&vulkan, &vulkan_allocator, size_of(Uniforms), {.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT}, {.DEVICE_LOCAL}); res != .SUCCESS {
+        app_panic("Failed to create staging buffer.")
+    } else {
+        staging_buffer = b
     }
 
     if res := vulkan_alloc(&vulkan, &vulkan_allocator); res != .SUCCESS {
@@ -122,8 +118,6 @@ main :: proc() {
             &descriptor_set); res != .SUCCESS {
             app_panic("Fuck3")
         }
-
-        uniform_buffer := uniform_buffers[i]
 
         descriptor_buffer_info := vk.DescriptorBufferInfo {
             buffer = uniform_buffer,
@@ -195,26 +189,24 @@ main :: proc() {
         u.view = linalg.matrix4_translate(Vector3{0.0, 0.0, -3.0})
         u.proj = linalg.matrix4_perspective(π/4.0, f32(w)/f32(h), 0.1, 100.0)
 
-        if data, res := vulkan_map_memory(&vulkan, &vulkan_allocator, staging_buffers[vulkan.frame_idx], 0, size_of(Uniforms)); res != .SUCCESS {
+        if data, res := vulkan_map_memory(&vulkan, &vulkan_allocator, staging_buffer, 0, size_of(Uniforms)); res != .SUCCESS {
             app_panic("Failed to map staging buffer memory.")
         } else {
             copy_slice(data, transmute([]byte)mem.Raw_Slice{&u, size_of(Uniforms)})
-            vulkan_unmap_memory(&vulkan, &vulkan_allocator, staging_buffers[vulkan.frame_idx])
+            vulkan_unmap_memory(&vulkan, &vulkan_allocator, staging_buffer)
         }
 
         @static staged := false
 
         if !staged {
-            if vulkan.frame_idx == len(vulkan.frames) - 1 {
-                staged = true
-            }
+            staged = true
 
             buffer_barriers_before := [?]vk.BufferMemoryBarrier {
                 {
                     sType = .BUFFER_MEMORY_BARRIER,
                     srcAccessMask = {},
                     dstAccessMask = {.TRANSFER_READ},
-                    buffer = staging_buffers[vulkan.frame_idx],
+                    buffer = staging_buffer,
                     offset = 0,
                     size = size_of(Uniforms)
                 },
@@ -222,7 +214,7 @@ main :: proc() {
                     sType = .BUFFER_MEMORY_BARRIER,
                     srcAccessMask = {},
                     dstAccessMask = {.TRANSFER_WRITE},
-                    buffer = uniform_buffers[vulkan.frame_idx],
+                    buffer = uniform_buffer,
                     offset = 0,
                     size = size_of(Uniforms),
                 },
@@ -244,8 +236,8 @@ main :: proc() {
 
             vk.CmdCopyBuffer(
                 commandBuffer = cb,
-                srcBuffer = staging_buffers[vulkan.frame_idx],
-                dstBuffer = uniform_buffers[vulkan.frame_idx],
+                srcBuffer = staging_buffer,
+                dstBuffer = uniform_buffer,
                 regionCount = 1,
                 pRegions = &region)
 
@@ -253,7 +245,7 @@ main :: proc() {
                 sType = .BUFFER_MEMORY_BARRIER,
                 srcAccessMask = {.TRANSFER_WRITE},
                 dstAccessMask = {.UNIFORM_READ},
-                buffer = uniform_buffers[vulkan.frame_idx],
+                buffer = uniform_buffer,
                 offset = 0,
                 size = size_of(Uniforms)
             }
@@ -271,7 +263,7 @@ main :: proc() {
                     sType = .BUFFER_MEMORY_BARRIER,
                     srcAccessMask = {.UNIFORM_READ},
                     dstAccessMask = {.TRANSFER_WRITE},
-                    buffer = uniform_buffers[vulkan.frame_idx],
+                    buffer = uniform_buffer,
                     offset = 0,
                     size = size_of(Uniforms),
                 },
@@ -293,8 +285,8 @@ main :: proc() {
 
             vk.CmdCopyBuffer(
                 commandBuffer = cb,
-                srcBuffer = staging_buffers[vulkan.frame_idx],
-                dstBuffer = uniform_buffers[vulkan.frame_idx],
+                srcBuffer = staging_buffer,
+                dstBuffer = uniform_buffer,
                 regionCount = 1,
                 pRegions = &region)
 
@@ -302,7 +294,7 @@ main :: proc() {
                 sType = .BUFFER_MEMORY_BARRIER,
                 srcAccessMask = {.TRANSFER_WRITE},
                 dstAccessMask = {.UNIFORM_READ},
-                buffer = uniform_buffers[vulkan.frame_idx],
+                buffer = uniform_buffer,
                 offset = 0,
                 size = size_of(Uniforms)
             }
