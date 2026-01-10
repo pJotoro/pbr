@@ -396,36 +396,44 @@ align_forward_device_size :: #force_inline proc(ptr, align: vk.DeviceSize) -> vk
 }
 
 @(private="file")
-vulkan_get_allocation_buffer :: proc(using allocator: ^Vulkan_Allocator, buffer: vk.Buffer) -> (allocation: Vulkan_Allocation) {
+vulkan_get_allocation_buffer :: proc(using allocator: ^Vulkan_Allocator, buffer: vk.Buffer,
+	loc := #caller_location) -> (allocation: Vulkan_Allocation) {
 	ok: bool
 	allocation, ok = buffer_allocations[buffer]
-	assert(ok)
+	assert(ok, loc=loc)
 	return
 }
 
 @(private="file")
-vulkan_get_allocation_image :: proc(using allocator: ^Vulkan_Allocator, image: vk.Image) -> (allocation: Vulkan_Allocation) {
+vulkan_get_allocation_image :: proc(using allocator: ^Vulkan_Allocator, image: vk.Image,
+	loc := #caller_location) -> (allocation: Vulkan_Allocation) {
 	ok: bool
 	allocation, ok = image_allocations[image]
-	assert(ok)
+	assert(ok, loc=loc)
 	return
 }
 
 @(private="file")
 vulkan_get_allocation :: proc{vulkan_get_allocation_buffer, vulkan_get_allocation_image}
 
-vulkan_map_memory_buffer :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, buffer: vk.Buffer, offset, size: vk.DeviceSize) -> (data: []byte, result: vk.Result) {
+vulkan_map_memory_buffer :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, 
+	buffer: vk.Buffer, offset, size: vk.DeviceSize,
+	loc := #caller_location) -> (data: []byte) {
 	allocation := vulkan_get_allocation(allocator, buffer)
 	raw := mem.Raw_Slice{len = int(size)}
-	result = vk.MapMemory(device, allocation.memory, allocation.offset + offset, size, {}, &raw.data)
+	res := vk.MapMemory(device, allocation.memory, allocation.offset + offset, size, {}, &raw.data)
+	ensure(res == .SUCCESS, loc=loc)
 	data = transmute([]byte)raw
 	return
 }
 
-vulkan_map_memory_image :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, image: vk.Image, offset, size: vk.DeviceSize) -> (data: []byte, result: vk.Result) {
+vulkan_map_memory_image :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, 
+	image: vk.Image, offset, size: vk.DeviceSize,
+	loc := #caller_location) -> (data: []byte) {
 	allocation := vulkan_get_allocation(allocator, image)
 	raw := mem.Raw_Slice{len = int(size)}
-	result = vk.MapMemory(device, allocation.memory, allocation.offset + offset, size, {}, &raw.data)
+	res := vk.MapMemory(device, allocation.memory, allocation.offset + offset, size, {}, &raw.data)
+	ensure(res == .SUCCESS, loc=loc)
 	data = transmute([]byte)raw
 	return
 }
