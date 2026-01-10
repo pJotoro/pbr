@@ -96,7 +96,9 @@ vulkan_create_image :: proc(
 }
 
 vulkan_alloc :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator) -> vk.Result {
-	if len(unallocated_buffers) == 0 && len(unallocated_images) == 0 do return .SUCCESS
+	if len(unallocated_buffers) == 0 && len(unallocated_images) == 0 {
+		return .SUCCESS
+	}
 
 	bind_buffer_memory_infos := make([dynamic]vk.BindBufferMemoryInfo, 0, len(unallocated_buffers), context.temp_allocator)
 	bind_image_memory_infos := make([dynamic]vk.BindImageMemoryInfo, 0, len(unallocated_images), context.temp_allocator)
@@ -142,7 +144,13 @@ vulkan_alloc :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator) 
 			ensure(memory_allocate_info.memoryTypeIndex != max(u32))
 
 			memory: vk.DeviceMemory = ---
-			vk.AllocateMemory(device, &memory_allocate_info, nil, &memory) or_return
+			if res := vk.AllocateMemory(device, &memory_allocate_info, nil, &memory); res != .SUCCESS {
+				if res == .ERROR_OUT_OF_DEVICE_MEMORY {
+					panic("Ran out of GPU memory.")
+				} else {
+					return res
+				}
+			}
 			buffer_allocations[unallocated_buffers[buffer_index].buffer] = {memory, 0}
 
 			bind_buffer_memory_info := vk.BindBufferMemoryInfo{
@@ -197,7 +205,13 @@ vulkan_alloc :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator) 
 			ensure(memory_allocate_info.memoryTypeIndex != max(u32))
 
 			memory: vk.DeviceMemory = ---
-			vk.AllocateMemory(device, &memory_allocate_info, nil, &memory) or_return
+			if res := vk.AllocateMemory(device, &memory_allocate_info, nil, &memory); res != .SUCCESS {
+				if res == .ERROR_OUT_OF_DEVICE_MEMORY {
+					panic("Ran out of GPU memory.")
+				} else {
+					return res
+				}
+			}
 			image_allocations[unallocated_images[image_index].image] = {memory, 0}
 
 			bind_image_memory_info := vk.BindImageMemoryInfo{
@@ -312,7 +326,13 @@ vulkan_alloc :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator) 
 			allocationSize = memory_offset,
 		}
 		memory: vk.DeviceMemory = ---
-		vk.AllocateMemory(device, &memory_allocate_info, nil, &memory) or_return
+		if res := vk.AllocateMemory(device, &memory_allocate_info, nil, &memory); res != .SUCCESS {
+			if res == .ERROR_OUT_OF_DEVICE_MEMORY {
+				panic("Ran out of GPU memory.")
+			} else {
+				return res
+			}
+		}
 
 		if bind_buffer_memory_info_start_index != len(bind_buffer_memory_infos) {
 			for &b in bind_buffer_memory_infos[bind_buffer_memory_info_start_index:] {

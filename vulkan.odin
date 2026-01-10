@@ -244,6 +244,7 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
             case vk.API_VERSION_1_4:
                 return "1.4"
         }
+        return ""
     }
     
     api_version: u32

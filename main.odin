@@ -32,7 +32,7 @@ main :: proc() {
     vulkan: Vulkan
     vulkan.arena = mem.arena_allocator(&{data = make([]byte, mem.Megabyte)})
     if res := vulkan_init(&vulkan, vk.API_VERSION_1_1, vk.API_VERSION_1_1); res != .SUCCESS {
-        panic("An unexpected failure occurred.")
+        panic("Unexpected failure occurred.")
     }
 
     // Uniforms :: struct {
