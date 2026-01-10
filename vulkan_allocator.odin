@@ -42,15 +42,17 @@ vulkan_create_allocator :: proc() -> (allocator: Vulkan_Allocator) {
 vulkan_create_buffer :: proc(
 	using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, 
 	size: vk.DeviceSize, usage: vk.BufferUsageFlags, 
-	memory_properties_include, memory_properties_exclude: vk.MemoryPropertyFlags) -> (buffer: vk.Buffer, result: vk.Result) 
+	memory_properties_include, memory_properties_exclude: vk.MemoryPropertyFlags,
+	loc := #caller_location) -> (buffer: vk.Buffer) 
 {
 	info := vk.BufferCreateInfo{
 		sType = .BUFFER_CREATE_INFO,
 		size = size,
 		usage = usage,
 	}
-	vk.CreateBuffer(device, &info, nil, &buffer) or_return
-	
+	res := vk.CreateBuffer(device, &info, nil, &buffer)
+	assert(res == .SUCCESS, loc=loc)
+
 	append(&unallocated_buffers, Vulkan_Unallocated_Buffer{buffer, memory_properties_include, memory_properties_exclude})
 	return
 }
@@ -62,7 +64,8 @@ vulkan_create_image :: proc(
 	samples: vk.SampleCountFlags, 
 	usage: vk.ImageUsageFlags, 
 	initial_layout: vk.ImageLayout, 
-	memory_properties_include, memory_properties_exclude: vk.MemoryPropertyFlags) -> (image: vk.Image, result: vk.Result) 
+	memory_properties_include, memory_properties_exclude: vk.MemoryPropertyFlags,
+	loc := #caller_location) -> (image: vk.Image, result: vk.Result) 
 {
 	image_type: vk.ImageType = .D1
 	height := height > 1 ? height : 1
@@ -85,7 +88,8 @@ vulkan_create_image :: proc(
 		usage = usage,
 		initialLayout = initial_layout,
 	}
-	vk.CreateImage(device, &info, nil, &image) or_return
+	res := vk.CreateImage(device, &info, nil, &image)
+	assert(res == .SUCCESS, loc=loc)
 
 	append(&unallocated_images, Vulkan_Unallocated_Image{image, memory_properties_include, memory_properties_exclude})
 	return

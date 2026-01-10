@@ -49,7 +49,7 @@ app_init :: proc() -> (w, h: int, refresh_rate: int) {
 	w, h, refresh_rate, ok = _app_init()
 	if !ok {
 		error_message := get_last_error_message()
-		app_panic(error_message)
+		panic(error_message)
 	}
     ctx.running = true
 	return
@@ -160,10 +160,9 @@ event_proc :: proc "system" (window: win32.HWND, message: win32.UINT, w_param: w
     return result
 }
 
-app_panic :: proc(text: string, loc := #caller_location) {
+app_message_box :: proc(text: string) {
     text_wstring := win32.utf8_to_wstring(text)
     win32.MessageBoxExW(ctx.window, text_wstring, nil, win32.MB_OK|win32.MB_ICONERROR|win32.MB_TOPMOST, 0)
-    panic(text, loc)
 }
 
 dprint_cstring :: proc "contextless" (s: cstring) {

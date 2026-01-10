@@ -24,13 +24,15 @@ Vector3 :: linalg.Vector3f32
 Vector4 :: linalg.Vector4f32
 
 main :: proc() {
+    context.assertion_failure_proc = assertion_failure_proc
+
     w, h, refresh_rate := app_init()
     dt := 1.0/f32(refresh_rate)
 
     vulkan: Vulkan
     vulkan.arena = mem.arena_allocator(&{data = make([]byte, mem.Megabyte)})
     if res := vulkan_init(&vulkan, vk.API_VERSION_1_1, vk.API_VERSION_1_1); res != .SUCCESS {
-        app_panic("Your graphics driver is out of date.")
+        panic("Your graphics driver is out of date.")
     }
 
     Uniforms :: struct {
@@ -42,22 +44,14 @@ main :: proc() {
 
     vulkan_allocator := vulkan_create_allocator()
 
-    uniform_buffer: vk.Buffer
-    if b, res := vulkan_create_buffer(&vulkan, &vulkan_allocator, size_of(Uniforms), {.TRANSFER_DST, .UNIFORM_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE}); res != .SUCCESS {
-        app_panic("Failed to create uniform buffer.")
-    } else {
-        uniform_buffer = b
-    }
+    uniform_buffer := vulkan_create_buffer(&vulkan, &vulkan_allocator, 
+        size_of(Uniforms), {.TRANSFER_DST, .UNIFORM_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE})
 
-    staging_buffer: vk.Buffer
-    if b, res := vulkan_create_buffer(&vulkan, &vulkan_allocator, size_of(Uniforms), {.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT}, {.DEVICE_LOCAL}); res != .SUCCESS {
-        app_panic("Failed to create staging buffer.")
-    } else {
-        staging_buffer = b
-    }
+    staging_buffer := vulkan_create_buffer(&vulkan, &vulkan_allocator, 
+        size_of(Uniforms), {.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT}, {.DEVICE_LOCAL})
 
     if res := vulkan_alloc(&vulkan, &vulkan_allocator); res != .SUCCESS {
-        app_panic("Failed to allocate GPU memory.")
+        panic("Ran out of GPU memory.")
     }
 
     descriptor_set_layout: vk.DescriptorSetLayout
@@ -77,7 +71,7 @@ main :: proc() {
         &descriptor_set_layout_info,
         nil,
         &descriptor_set_layout); res != .SUCCESS {
-        app_panic("Fuck")
+        panic("Fuck")
     }
 
     descriptor_pool_size := vk.DescriptorPoolSize {
@@ -98,7 +92,7 @@ main :: proc() {
         &descriptor_pool_info,
         nil,
         &descriptor_pool); res != .SUCCESS {
-        app_panic("Fuck2")
+        panic("Fuck2")
     }
 
     descriptor_set_allocate_info := vk.DescriptorSetAllocateInfo {
@@ -114,7 +108,7 @@ main :: proc() {
             vulkan.device,
             &descriptor_set_allocate_info,
             &descriptor_set); res != .SUCCESS {
-            app_panic("Fuck3")
+            panic("Fuck3")
         }
 
         descriptor_buffer_info := vk.DescriptorBufferInfo {
@@ -143,14 +137,14 @@ main :: proc() {
 
     pipeline_layout: vk.PipelineLayout
     if res := vk.CreatePipelineLayout(vulkan.device, &pipeline_layout_info, nil, &pipeline_layout); res != .SUCCESS {
-        app_panic("Failed to create pipeline layout!")
+        panic("Failed to create pipeline layout!")
     }
 
     pipeline: vk.Pipeline
     {
         vert: vk.PipelineShaderStageCreateInfo
         if s, res := vulkan_create_shader_stage(vulkan.device, "build/debug/shader_vert.spv", .VERTEX); res != .SUCCESS {
-            app_panic("Failed to create vertex shader stage.")
+            panic("Failed to create vertex shader stage.")
         } else {
             vert = s
         }
@@ -158,7 +152,7 @@ main :: proc() {
 
         frag: vk.PipelineShaderStageCreateInfo
         if s, res := vulkan_create_shader_stage(vulkan.device, "build/debug/shader_frag.spv", .FRAGMENT); res != .SUCCESS {
-            app_panic("Failed to create fragment shader stage.")
+            panic("Failed to create fragment shader stage.")
         } else {
             frag = s
         }
@@ -170,7 +164,7 @@ main :: proc() {
         }
 
         if p, res := vulkan_create_graphics_pipeline(&vulkan, shader_stages, pipeline_layout = pipeline_layout); res != .SUCCESS {
-            app_panic("Failed to create graphics pipeline!")
+            panic("Failed to create graphics pipeline!")
         } else {
             pipeline = p
         }
@@ -261,7 +255,7 @@ main :: proc() {
         u.proj = linalg.matrix4_perspective(π/4.0, f32(w)/f32(h), 0.1, 100.0)
 
         if data, res := vulkan_map_memory(&vulkan, &vulkan_allocator, staging_buffer, 0, size_of(Uniforms)); res != .SUCCESS {
-            app_panic("Failed to map staging buffer memory.")
+            panic("Failed to map staging buffer memory.")
         } else {
             copy_slice(data, transmute([]byte)mem.Raw_Slice{&u, size_of(Uniforms)})
             vulkan_unmap_memory(&vulkan, &vulkan_allocator, staging_buffer)
@@ -269,7 +263,7 @@ main :: proc() {
 
         cb: vk.CommandBuffer
         if command_buffer, res := vulkan_begin_rendering_commands(&vulkan); res != .SUCCESS {
-            app_panic("Unexpected failure occurred.")
+            panic("Unexpected failure occurred.")
         } else {
             cb = command_buffer
         }
@@ -399,7 +393,7 @@ main :: proc() {
         vulkan_end_rendering(&vulkan)
 
         if res := vulkan_end_rendering_commands(&vulkan); res != .SUCCESS {
-            app_panic("Unexpected failure occurred.")
+            panic("Unexpected failure occurred.")
         }
 
         free_all(context.temp_allocator)

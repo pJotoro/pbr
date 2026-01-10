@@ -545,15 +545,15 @@ vulkan_load_cgltf :: proc(vulkan: ^Vulkan, vulkan_allocator: ^Vulkan_Allocator) 
 
 	assert(vertex_buffer_size + index_buffer_size == vk.DeviceSize(len(data.bin)))
 
-	vertex_buffer, _ := vulkan_create_buffer(vulkan, vulkan_allocator, 
+	vertex_buffer := vulkan_create_buffer(vulkan, vulkan_allocator, 
 		vertex_buffer_size, 
 		{.TRANSFER_DST, .VERTEX_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE})
 
-	index_buffer, _ := vulkan_create_buffer(vulkan, vulkan_allocator, 
+	index_buffer := vulkan_create_buffer(vulkan, vulkan_allocator, 
 		index_buffer_size, 
 		{.TRANSFER_DST, .INDEX_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE})
 
-	staging_buffer, _ := vulkan_create_buffer(vulkan, vulkan_allocator, 
+	staging_buffer  := vulkan_create_buffer(vulkan, vulkan_allocator, 
 		vertex_buffer_size + index_buffer_size, 
 		{.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT}, {.DEVICE_LOCAL})
 
