@@ -51,7 +51,7 @@ vulkan_create_buffer :: proc(
 		usage = usage,
 	}
 	res := vk.CreateBuffer(device, &info, nil, &buffer)
-	assert(res == .SUCCESS, loc=loc)
+	ensure(res == .SUCCESS, loc=loc)
 
 	append(&unallocated_buffers, Vulkan_Unallocated_Buffer{buffer, memory_properties_include, memory_properties_exclude})
 	return
@@ -89,7 +89,7 @@ vulkan_create_image :: proc(
 		initialLayout = initial_layout,
 	}
 	res := vk.CreateImage(device, &info, nil, &image)
-	assert(res == .SUCCESS, loc=loc)
+	ensure(res == .SUCCESS, loc=loc)
 
 	append(&unallocated_images, Vulkan_Unallocated_Image{image, memory_properties_include, memory_properties_exclude})
 	return
@@ -139,7 +139,7 @@ vulkan_alloc :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator) 
 					break
 				}
 			}
-			assert(memory_allocate_info.memoryTypeIndex != max(u32))
+			ensure(memory_allocate_info.memoryTypeIndex != max(u32))
 
 			memory: vk.DeviceMemory = ---
 			vk.AllocateMemory(device, &memory_allocate_info, nil, &memory) or_return
@@ -194,7 +194,7 @@ vulkan_alloc :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator) 
 					break
 				}
 			}
-			assert(memory_allocate_info.memoryTypeIndex != max(u32))
+			ensure(memory_allocate_info.memoryTypeIndex != max(u32))
 
 			memory: vk.DeviceMemory = ---
 			vk.AllocateMemory(device, &memory_allocate_info, nil, &memory) or_return

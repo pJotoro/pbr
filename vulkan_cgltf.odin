@@ -553,7 +553,7 @@ vulkan_load_cgltf :: proc(vulkan: ^Vulkan, vulkan_allocator: ^Vulkan_Allocator) 
 		index_buffer_size, 
 		{.TRANSFER_DST, .INDEX_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE})
 
-	staging_buffer  := vulkan_create_buffer(vulkan, vulkan_allocator, 
+	staging_buffer := vulkan_create_buffer(vulkan, vulkan_allocator, 
 		vertex_buffer_size + index_buffer_size, 
 		{.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT}, {.DEVICE_LOCAL})
 
