@@ -43,15 +43,14 @@ vulkan_create_buffer :: proc(
 	using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, 
 	size: vk.DeviceSize, usage: vk.BufferUsageFlags, 
 	memory_properties_include, memory_properties_exclude: vk.MemoryPropertyFlags,
-	loc := #caller_location) -> (buffer: vk.Buffer) 
+	loc := #caller_location) -> (buffer: vk.Buffer, res: vk.Result) 
 {
 	info := vk.BufferCreateInfo{
 		sType = .BUFFER_CREATE_INFO,
 		size = size,
 		usage = usage,
 	}
-	res := vk.CreateBuffer(device, &info, nil, &buffer)
-	ensure(res == .SUCCESS, loc=loc)
+	vk.CreateBuffer(device, &info, nil, &buffer) or_return
 
 	append(&unallocated_buffers, Vulkan_Unallocated_Buffer{buffer, memory_properties_include, memory_properties_exclude})
 	return
@@ -88,8 +87,7 @@ vulkan_create_image :: proc(
 		usage = usage,
 		initialLayout = initial_layout,
 	}
-	res := vk.CreateImage(device, &info, nil, &image)
-	ensure(res == .SUCCESS, loc=loc)
+	vk.CreateImage(device, &info, nil, &image) or_return
 
 	append(&unallocated_images, Vulkan_Unallocated_Image{image, memory_properties_include, memory_properties_exclude})
 	return
@@ -141,7 +139,7 @@ vulkan_alloc :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator) 
 					break
 				}
 			}
-			ensure(memory_allocate_info.memoryTypeIndex != max(u32))
+			assert(memory_allocate_info.memoryTypeIndex != max(u32))
 
 			memory: vk.DeviceMemory = ---
 			if res := vk.AllocateMemory(device, &memory_allocate_info, nil, &memory); res != .SUCCESS {
@@ -438,22 +436,20 @@ vulkan_get_allocation :: proc{vulkan_get_allocation_buffer, vulkan_get_allocatio
 
 vulkan_map_memory_buffer :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, 
 	buffer: vk.Buffer, offset, size: vk.DeviceSize,
-	loc := #caller_location) -> (data: []byte) {
+	loc := #caller_location) -> (data: []byte, res: vk.Result) {
 	allocation := vulkan_get_allocation(allocator, buffer)
 	raw := mem.Raw_Slice{len = int(size)}
-	res := vk.MapMemory(device, allocation.memory, allocation.offset + offset, size, {}, &raw.data)
-	ensure(res == .SUCCESS, loc=loc)
+	vk.MapMemory(device, allocation.memory, allocation.offset + offset, size, {}, &raw.data) or_return
 	data = transmute([]byte)raw
 	return
 }
 
 vulkan_map_memory_image :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, 
 	image: vk.Image, offset, size: vk.DeviceSize,
-	loc := #caller_location) -> (data: []byte) {
+	loc := #caller_location) -> (data: []byte, res: vk.Result) {
 	allocation := vulkan_get_allocation(allocator, image)
 	raw := mem.Raw_Slice{len = int(size)}
-	res := vk.MapMemory(device, allocation.memory, allocation.offset + offset, size, {}, &raw.data)
-	ensure(res == .SUCCESS, loc=loc)
+	vk.MapMemory(device, allocation.memory, allocation.offset + offset, size, {}, &raw.data) or_return
 	data = transmute([]byte)raw
 	return
 }
