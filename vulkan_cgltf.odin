@@ -39,7 +39,16 @@ cgltf_load :: proc(name: string) -> (out_data: ^cgltf.data, res: cgltf.result) {
     return cgltf.parse(options, raw_data(file_data), len(file_data))
 }
 
-vulkan_load_cgltf :: proc() {
+Model :: struct {
+	vertex_buffer_regions: [dynamic]vk.BufferCopy,
+	index_buffer_regions: [dynamic]vk.BufferCopy,
+	vertex_buffer: vk.Buffer,
+	index_buffer: vk.Buffer,
+	staging_buffer: vk.Buffer,
+	staging_buffer_data: []byte,
+}
+
+vulkan_load_cgltf :: proc(vulkan: ^Vulkan, vulkan_allocator: ^Vulkan_Allocator) -> Model {
 	/*
 	Parts of gltf file I don't handle yet that I have to:
 
@@ -55,8 +64,6 @@ vulkan_load_cgltf :: proc() {
 
 	index_buffer_size: vk.DeviceSize
 	index_buffer_regions := make([dynamic]vk.BufferCopy)
-
-	staging_buffer_size: vk.DeviceSize
 
 	data, res := cgltf_load("assets/chocolate_donut.glb")
 	assert(res == .success)
@@ -76,15 +83,22 @@ vulkan_load_cgltf :: proc() {
 			assert(primitive.material != nil)
 			
 			assert(len(primitive.attributes) == 3)
+			stride := uint(0)
 			assert(primitive.attributes[0].name == "POSITION")
 			assert(primitive.attributes[0].type == .position)
 			assert(primitive.attributes[0].index == 0)
+			stride += primitive.attributes[0].data.stride
+			assert(vulkan_get_format(primitive.attributes[0].data.component_type, primitive.attributes[0].data.type) == .R32G32B32_SFLOAT)
 			assert(primitive.attributes[1].name == "NORMAL")
 			assert(primitive.attributes[1].type == .normal)
 			assert(primitive.attributes[1].index == 0)
+			assert(vulkan_get_format(primitive.attributes[1].data.component_type, primitive.attributes[1].data.type) == .R32G32B32_SFLOAT)
+			stride += primitive.attributes[1].data.stride
 			assert(primitive.attributes[2].name == "TEXCOORD_0")
 			assert(primitive.attributes[2].type == .texcoord)
 			assert(primitive.attributes[2].index == 0)
+			assert(vulkan_get_format(primitive.attributes[2].data.component_type, primitive.attributes[2].data.type) == .R32G32_SFLOAT)
+			stride += primitive.attributes[2].data.stride
 
 			assert(primitive.targets == nil)
 			assert(primitive.extras.data == nil)
@@ -101,8 +115,20 @@ vulkan_load_cgltf :: proc() {
 
 	for material in data.materials {
 		assert(material.name != "")
+
 		assert(material.has_pbr_metallic_roughness == true)
+		assert(material.pbr_metallic_roughness.base_color_texture == {})
+		assert(material.pbr_metallic_roughness.metallic_roughness_texture == {})
+		assert(material.pbr_metallic_roughness.base_color_factor != {})
+		assert(material.pbr_metallic_roughness.metallic_factor == 0)
+		assert(material.pbr_metallic_roughness.roughness_factor != 0.0)
+
 		assert(!material.has_pbr_specular_glossiness)
+		assert(material.pbr_specular_glossiness.diffuse_texture == {})
+		assert(material.pbr_specular_glossiness.specular_glossiness_texture == {})
+		assert(material.pbr_specular_glossiness.diffuse_factor == {1, 1, 1, 1})
+		assert(material.pbr_specular_glossiness.specular_factor == {1, 1, 1})
+		assert(material.pbr_specular_glossiness.glossiness_factor == 1)
 		
 		assert(material.has_clearcoat == false)
 		assert(material.clearcoat == {})
@@ -138,18 +164,6 @@ vulkan_load_cgltf :: proc() {
 
 		assert(!material.has_dispersion)
 		assert(material.dispersion == {})
-
-		assert(material.pbr_metallic_roughness.base_color_texture == {})
-		assert(material.pbr_metallic_roughness.metallic_roughness_texture == {})
-		assert(material.pbr_metallic_roughness.base_color_factor != {})
-		assert(material.pbr_metallic_roughness.metallic_factor == 0)
-		assert(material.pbr_metallic_roughness.roughness_factor != 0.0)
-
-		assert(material.pbr_specular_glossiness.diffuse_texture == {})
-		assert(material.pbr_specular_glossiness.specular_glossiness_texture == {})
-		assert(material.pbr_specular_glossiness.diffuse_factor == {1, 1, 1, 1})
-		assert(material.pbr_specular_glossiness.specular_factor == {1, 1, 1})
-		assert(material.pbr_specular_glossiness.glossiness_factor == 1)
 
 		assert(material.normal_texture == {})
 		assert(material.occlusion_texture == {})
@@ -196,15 +210,24 @@ vulkan_load_cgltf :: proc() {
 	for buffer_view in data.buffer_views {
 		// buffer_view.name
 		assert(buffer_view.buffer != nil)
-		// buffer_view.offset
-		// buffer_view.size
 		assert(buffer_view.stride == 0)
 		switch buffer_view.type {
 			case .invalid:
 
 			case .vertices:
-
+				append(&vertex_buffer_regions, vk.BufferCopy{
+					srcOffset = vk.DeviceSize(buffer_view.offset),
+					dstOffset = vertex_buffer_size,
+					size = vk.DeviceSize(buffer_view.size),
+				})
+				vertex_buffer_size += vk.DeviceSize(buffer_view.size)
 			case .indices:
+				append(&index_buffer_regions, vk.BufferCopy{
+					srcOffset = vk.DeviceSize(buffer_view.offset),
+					dstOffset = index_buffer_size,
+					size = vk.DeviceSize(buffer_view.size),
+				})
+				index_buffer_size += vk.DeviceSize(buffer_view.size)
 		}
 		assert(buffer_view.data == nil)
 		assert(!buffer_view.has_meshopt_compression)
@@ -519,6 +542,32 @@ vulkan_load_cgltf :: proc() {
 	assert(data.variants == nil)
 	// data.extensions_used = ["KHR_materials_specular", "KHR_materials_ior"]
 	assert(data.extensions_required == nil)
+
+	assert(vertex_buffer_size + index_buffer_size == vk.DeviceSize(len(data.bin)))
+
+	vertex_buffer, _ := vulkan_create_buffer(vulkan, vulkan_allocator, 
+		vertex_buffer_size, 
+		{.TRANSFER_DST, .VERTEX_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE})
+
+	index_buffer, _ := vulkan_create_buffer(vulkan, vulkan_allocator, 
+		index_buffer_size, 
+		{.TRANSFER_DST, .INDEX_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE})
+
+	staging_buffer, _ := vulkan_create_buffer(vulkan, vulkan_allocator, 
+		vertex_buffer_size + index_buffer_size, 
+		{.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT}, {.DEVICE_LOCAL})
+
+	model := Model {
+		vertex_buffer_regions = vertex_buffer_regions,
+		index_buffer_regions = index_buffer_regions,
+		vertex_buffer = vertex_buffer,
+		index_buffer = staging_buffer,
+		staging_buffer = staging_buffer,
+		staging_buffer_data = make([]byte, vertex_buffer_size + index_buffer_size)
+	}
+	copy(model.staging_buffer_data, data.bin)
+
+	return model
 }
 
 vulkan_get_format_from_cgltf_component_type_and_cgltf_type :: #force_inline proc "contextless" (cgltf_component_type: cgltf.component_type, cgltf_type: cgltf.type) -> vk.Format {

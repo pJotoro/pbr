@@ -850,8 +850,6 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
     when VULKAN_DISABLE_PIPELINE_OPTIMIZATION {
         default_pipeline_info.flags += {.DISABLE_OPTIMIZATION}
     }
-        
-    
 
     return .SUCCESS
 }
