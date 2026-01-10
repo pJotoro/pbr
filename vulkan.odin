@@ -1,8 +1,8 @@
 package pbr
 
-import "core:slice"
 import "core:dynlib"
 import "core:mem"
+import "core:slice"
 
 import vk "vendor:vulkan"
 
@@ -851,131 +851,7 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
         default_pipeline_info.flags += {.DISABLE_OPTIMIZATION}
     }
         
-    /*
-    Parts of gltf file I don't handle yet that I have to:
-
-    meshes
-    materials
-    accessors
-    nodes
-    extensions    
-    */
-
-    // vertex_buffer_create_info := vk.BufferCreateInfo {
-    //     sType = .BUFFER_CREATE_INFO,
-    //     usage = {.TRANSFER_DST, .VERTEX_BUFFER},
-    // }
-    // index_buffer_create_info := vk.BufferCreateInfo {
-    //     sType = .BUFFER_CREATE_INFO,
-    //     usage = {.TRANSFER_DST, .INDEX_BUFFER},
-    // }
-    // staging_buffer_create_info := vk.BufferCreateInfo {
-    //     sType = .BUFFER_CREATE_INFO,
-    //     usage = {.TRANSFER_SRC},
-    // }
-
-
-    // if data, res := cgltf_load("assets/chocolate_donut.glb"); res != .success {
-    //     app_panic("Failed to load assets/chocolate_donut.glb")
-    // } else {
-        // vertex_inputs := make([dynamic]vk.PipelineVertexInputStateCreateInfo, 0, len(data.meshes), context.temp_allocator)
-        // for mesh in data.meshes {
-        //     attributes := make([dynamic]vk.VertexInputAttributeDescription, 0, len(mesh.primitives), context.temp_allocator)
-        //     bindings := make([dynamic]vk.VertexInputBindingDescription, 0, len(mesh.primitives), context.temp_allocator)
-        //     for primitive, location in mesh.primitives {
-        //         attribute := vk.VertexInputAttributeDescription {
-        //             location = u32(location),
-
-        //         }
-        //     }
-        //     vertex_input := vk.PipelineVertexInputStateCreateInfo {
-        //         sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        //     }
-        // }
-
-        // for mesh in data.meshes {
-        //     // mesh.name
-        //     // mesh.primitives
-        //     assert(mesh.weights == nil)
-        //     assert(mesh.target_names == nil)
-        //     assert(mesh.extras.data == nil)
-        //     assert(mesh.extensions_count == 0)
-
-        //     attributes: [dynamic]vk.VertexInputAttributeDescription
-        //     for primitive, binding_index in mesh.primitives {
-        //         assert(primitive.type == .triangles)
-        //         assert(primitive.indices.component_type == .r_16u)
-        //         assert(!primitive.indices.normalized)
-        //         assert(primitive.indices.type == .scalar)
-        //         assert(primitive.indices.offset == 0)
-        //         assert(primitive.indices.count == 6 || primitive.indices.count == 36)
-        //         assert(primitive.indices.stride == 2)
-        //         // primitive.buffer_view
-        //         assert(!primitive.indices.has_min)
-        //         assert(!primitive.indices.has_max)
-        //         assert(!primitive.indices.is_sparse)
-        //         assert(primitive.indices.extras.data == nil)
-        //         assert(primitive.indices.extensions_count == 0)
-        //         // primitive.material
-        //         // primitive.attributes
-        //         for attribute, attribute_index in primitive.attributes {
-        //             append(&attributes, vk.VertexInputAttributeDescription{
-        //                 location = u32(attribute_index),
-        //                 binding = u32(binding_index),
-        //                 //format = 
-        //             })
-        //         }
-        //         assert(primitive.targets == nil)
-        //         assert(primitive.extras.data == nil)
-        //         assert(!primitive.has_draco_mesh_compression)
-        //         assert(primitive.mappings == nil)
-        //         assert(primitive.extensions_count == 0)
-
-        //         fmt.printf("%#v\n", primitive)
-        //     }
-        // }
-
-        // vertex_buffer_offset := 0
-        // index_buffer_offset := 0
-
-        // for buffer_view in data.buffer_views {
-        //     assert(buffer_view.stride == 0 && buffer_view.data == nil && !buffer_view.has_meshopt_compression && buffer_view.extras.data == nil && buffer_view.extensions_count == 0)
-
-        //     switch buffer_view.type {
-        //         case .vertices:
-        //             vertex_buffer_create_info.size += vk.DeviceSize(buffer_view.size)
-        //             append(&vertex_buffer_regions, vk.BufferCopy{
-        //                 srcOffset = vk.DeviceSize(buffer_view.offset),
-        //                 dstOffset = vk.DeviceSize(vertex_buffer_offset),
-        //                 size = vk.DeviceSize(buffer_view.size),
-        //             })
-
-        //         case .indices:
-        //             index_buffer_create_info.size += vk.DeviceSize(buffer_view.size)
-        //             append(&index_buffer_regions, vk.BufferCopy{
-        //                 srcOffset = vk.DeviceSize(buffer_view.offset),
-        //                 dstOffset = vk.DeviceSize(index_buffer_offset),
-        //                 size = vk.DeviceSize(buffer_view.size),
-        //             })
-
-        //         case .invalid:
-        //             app_panic("Invalid buffer view type.")
-        //     }
-        // }
-
-    //     vertex_buffer = vulkan_create_buffer(device, &physical_device_memory_properties, &vertex_buffer_create_info, {.DEVICE_LOCAL}) or_return
-    //     index_buffer = vulkan_create_buffer(device, &physical_device_memory_properties, &index_buffer_create_info, {.DEVICE_LOCAL}) or_return
-    //     staging_buffer_create_info.size = vertex_buffer_create_info.size + index_buffer_create_info.size
-    //     staging_buffer = vulkan_create_buffer(device, &physical_device_memory_properties, &staging_buffer_create_info, {.HOST_VISIBLE, .HOST_COHERENT}) or_return
-
-    //     // NOTE: This happens to be true for the donut model. It might not be true for other models.
-    //     assert(int(staging_buffer_create_info.size) == len(data.bin))
-
-    //     m: rawptr
-    //     vk.MapMemory(device, staging_buffer.memory, 0, staging_buffer_create_info.size, {}, &m) or_return
-    //     intrinsics.mem_copy(m, raw_data(data.bin), staging_buffer_create_info.size)
-    //     vk.UnmapMemory(device, staging_buffer.memory)
-    // }
+    
 
     return .SUCCESS
 }
@@ -983,113 +859,11 @@ vulkan_init :: proc(using vulkan: ^Vulkan, minimum_version, desired_version: u32
 when VULKAN_DEBUG_UTILS {
     vulkan_debug_callback :: proc "system" (severity: vk.DebugUtilsMessageSeverityFlagsEXT, types: vk.DebugUtilsMessageTypeFlagsEXT, data: ^vk.DebugUtilsMessengerCallbackDataEXT, user_data: rawptr) -> b32
     {
-        debug_print_cstring(data.pMessage)
+        dprint_cstring(data.pMessage)
         return false
     }
 }
 
-// vulkan_get_format_from_cgltf_component_type_and_cgltf_type :: #force_inline proc "contextless" (cgltf_component_type: cgltf.component_type, cgltf_type: cgltf.type) -> vk.Format {
-//     #partial switch cgltf_component_type {
-//         case .r_8:
-//             #partial switch cgltf_type {
-//                 case .scalar:
-//                     return .R8_SINT
-//                 case .vec2:
-//                     return .R8G8_SINT
-//                 case .vec3:
-//                     return .R8G8B8_SINT
-//                 case .vec4:
-//                     return .R8G8B8A8_SINT
-//             }
-//         case .r_8u:
-//             #partial switch cgltf_type {
-//                 case .scalar:
-//                     return .R8_UINT
-//                 case .vec2:
-//                     return .R8G8_UINT
-//                 case .vec3:
-//                     return .R8G8B8_UINT
-//                 case .vec4:
-//                     return .R8G8B8A8_UINT
-//             }
-//         case .r_16:
-//             #partial switch cgltf_type {
-//                 case .scalar:
-//                     return .R16_SINT
-//                 case .vec2:
-//                     return .R16G16_SINT
-//                 case .vec3:
-//                     return .R16G16B16_SINT
-//                 case .vec4:
-//                     return .R16G16B16A16_SINT
-//             }
-//         case .r_16u:
-//             #partial switch cgltf_type {
-//                 case .scalar:
-//                     return .R16_UINT
-//                 case .vec2:
-//                     return .R16G16_UINT
-//                 case .vec3:
-//                     return .R16G16B16_UINT
-//                 case .vec4:
-//                     return .R16G16B16A16_UINT
-//             }
-//         case .r_32u:
-//             #partial switch cgltf_type {
-//                 case .scalar:
-//                     return .R32_UINT
-//                 case .vec2:
-//                     return .R32G32_UINT
-//                 case .vec3:
-//                     return .R32G32B32_UINT
-//                 case .vec4:
-//                     return .R32G32B32A32_UINT
-//             }
-//         case .r_32f:
-//             #partial switch cgltf_type {
-//                 case .scalar:
-//                     return .R32_SFLOAT
-//                 case .vec2:
-//                     return .R32G32_SFLOAT
-//                 case .vec3:
-//                     return .R32G32B32_SFLOAT
-//                 case .vec4:
-//                     return .R32G32B32A32_SFLOAT
-//             }
-//     }
-
-//     return .UNDEFINED
-// }
-
-// vulkan_get_format :: proc{vulkan_get_format_from_cgltf_component_type_and_cgltf_type}
-
-// cgltf_load :: proc(name: string) -> (out_data: ^cgltf.data, res: cgltf.result) {
-//     file_data, ok := os.read_entire_file(name, context.temp_allocator)
-//     if !ok {
-//         res = .file_not_found
-//         return
-//     }
-
-//     alloc_proc :: proc "c" (user: rawptr, size: uint) -> rawptr {
-//         context = runtime.default_context()
-//         data := make([]byte, size, context.temp_allocator)
-//         return raw_data(data)
-//     }
-
-//     free_proc :: proc "c" (user: rawptr, ptr: rawptr) {
-
-//     }
-
-//     memory_options := cgltf.memory_options {
-//         alloc_func = alloc_proc,
-//         free_func = free_proc,
-//         user_data = nil,
-//     }
-
-//     options := cgltf.options {
-//         type = .glb,
-//         memory = memory_options,
-//     }
-
-//     return cgltf.parse(options, raw_data(file_data), len(file_data))
-// }
+vulkan_get_format :: proc {
+	vulkan_get_format_from_cgltf_component_type_and_cgltf_type,
+}

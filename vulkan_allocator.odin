@@ -6,16 +6,19 @@ import "core:slice"
 
 // TODO: Add support for Vulkan 1.0.
 
+@(private="file")
 Vulkan_Unallocated_Buffer :: struct {
 	buffer: vk.Buffer,
 	memory_properties_include, memory_properties_exclude: vk.MemoryPropertyFlags,
 }
 
+@(private="file")
 Vulkan_Unallocated_Image :: struct {
 	image: vk.Image,
 	memory_properties_include, memory_properties_exclude: vk.MemoryPropertyFlags,
 }
 
+@(private="file")
 Vulkan_Allocation :: struct {
 	memory: vk.DeviceMemory,
 	offset: vk.DeviceSize,
@@ -388,6 +391,7 @@ align_forward_device_size :: #force_inline proc(ptr, align: vk.DeviceSize) -> vk
 	return p
 }
 
+@(private="file")
 vulkan_get_allocation_buffer :: proc(using allocator: ^Vulkan_Allocator, buffer: vk.Buffer) -> (allocation: Vulkan_Allocation) {
 	ok: bool
 	allocation, ok = buffer_allocations[buffer]
@@ -395,6 +399,7 @@ vulkan_get_allocation_buffer :: proc(using allocator: ^Vulkan_Allocator, buffer:
 	return
 }
 
+@(private="file")
 vulkan_get_allocation_image :: proc(using allocator: ^Vulkan_Allocator, image: vk.Image) -> (allocation: Vulkan_Allocation) {
 	ok: bool
 	allocation, ok = image_allocations[image]
@@ -402,6 +407,7 @@ vulkan_get_allocation_image :: proc(using allocator: ^Vulkan_Allocator, image: v
 	return
 }
 
+@(private="file")
 vulkan_get_allocation :: proc{vulkan_get_allocation_buffer, vulkan_get_allocation_image}
 
 vulkan_map_memory_buffer :: proc(using vulkan: ^Vulkan, using allocator: ^Vulkan_Allocator, buffer: vk.Buffer, offset, size: vk.DeviceSize) -> (data: []byte, result: vk.Result) {

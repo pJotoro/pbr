@@ -3,6 +3,9 @@ package pbr
 import "base:runtime"
 import "core:debug/trace"
 
+import "core:fmt"
+import "core:strings"
+
 when STACK_TRACE {
     global_trace_ctx: trace.Context
 
@@ -34,4 +37,25 @@ when STACK_TRACE {
         }
         runtime.trap()
     }
+
+    debug_trace_init :: proc() {
+    	trace.init(&global_trace_ctx)
+        context.assertion_failure_proc = debug_trace_assertion_failure_proc
+    }
+} else {
+	debug_trace_init :: proc() {}
+}
+
+dprint :: proc(args: ..any, sep := " ") -> string {
+	str := fmt.tprint(args, sep)
+	cstr := strings.clone_to_cstring(str)
+	dprint_cstring(cstr)
+	return str
+}
+
+dprintf :: proc(format: string, args: ..any, newline := false) -> string {
+	str := fmt.tprintf(fmt=format, args=args, newline=newline)
+	cstr := strings.clone_to_cstring(str)
+	dprint_cstring(cstr)
+	return str
 }

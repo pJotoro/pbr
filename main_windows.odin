@@ -166,11 +166,7 @@ app_panic :: proc(text: string, loc := #caller_location) {
     panic(text, loc)
 }
 
-debug_print_cstring :: proc "contextless" (s: cstring) {
+dprint_cstring :: proc "contextless" (s: cstring) {
     win32.OutputDebugStringA(s)
 }
 
-debug_print_byte :: proc "contextless" (b: byte) {
-    bytes := [?]byte { b, 0 }
-    win32.OutputDebugStringA(cstring(raw_data(bytes[:])))
-}

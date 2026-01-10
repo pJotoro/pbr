@@ -1,10 +1,11 @@
 package pbr
 
 import "base:intrinsics"
+
 import "core:mem"
-import vk "vendor:vulkan"
-import "core:debug/trace"
 import "core:math/linalg"
+
+import vk "vendor:vulkan"
 
 APP_TOPMOST :: #config(APP_TOPMOST, !ODIN_DEBUG)
 
@@ -21,10 +22,7 @@ STACK_TRACE :: #config(STACK_TRACE, ODIN_DEBUG)
 Vector3 :: linalg.Vector3f32
 
 main :: proc() {
-    when STACK_TRACE {
-        trace.init(&global_trace_ctx)
-        context.assertion_failure_proc = debug_trace_assertion_failure_proc
-    }
+    debug_trace_init()
 
     w, h, refresh_rate := app_init()
     dt := 1.0/f32(refresh_rate)
@@ -178,14 +176,9 @@ main :: proc() {
         }
     }
 
-    for app_update() {
-        cb: vk.CommandBuffer
-        if command_buffer, res := vulkan_begin_rendering_commands(&vulkan); res != .SUCCESS {
-            app_panic("Unexpected failure occurred.")
-        } else {
-            cb = command_buffer
-        }
+    vulkan_load_cgltf()
 
+    for app_update() {
         @static bruh := f32(0.0)
         bruh += dt
 
@@ -198,6 +191,13 @@ main :: proc() {
         } else {
             copy_slice(data, transmute([]byte)mem.Raw_Slice{&u, size_of(Uniforms)})
             vulkan_unmap_memory(&vulkan, &vulkan_allocator, staging_buffer)
+        }
+
+        cb: vk.CommandBuffer
+        if command_buffer, res := vulkan_begin_rendering_commands(&vulkan); res != .SUCCESS {
+            app_panic("Unexpected failure occurred.")
+        } else {
+            cb = command_buffer
         }
 
         @static staged := false
