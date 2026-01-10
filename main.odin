@@ -137,25 +137,6 @@ main :: proc() {
         vk.UpdateDescriptorSets(vulkan.device, 1, &write_descriptor_set, 0, nil)
     }
 
-    vert: vk.PipelineShaderStageCreateInfo
-    if s, res := vulkan_create_shader_stage(vulkan.device, "build/debug/shader_vert.spv", .VERTEX); res != .SUCCESS {
-        app_panic("Failed to create vertex shader stage.")
-    } else {
-        vert = s
-    }
-
-    frag: vk.PipelineShaderStageCreateInfo
-    if s, res := vulkan_create_shader_stage(vulkan.device, "build/debug/shader_frag.spv", .FRAGMENT); res != .SUCCESS {
-        app_panic("Failed to create fragment shader stage.")
-    } else {
-        frag = s
-    }
-
-    shader_stages := []vk.PipelineShaderStageCreateInfo {
-        vert,
-        frag,
-    }
-
     pipeline_layout_info := vk.PipelineLayoutCreateInfo {
         sType = .PIPELINE_LAYOUT_CREATE_INFO,
         setLayoutCount = 1,
@@ -168,10 +149,33 @@ main :: proc() {
     }
 
     pipeline: vk.Pipeline
-    if p, res := vulkan_create_graphics_pipeline(&vulkan, shader_stages, pipeline_layout = pipeline_layout); res != .SUCCESS {
-        app_panic("Failed to create graphics pipeline!")
-    } else {
-        pipeline = p
+    {
+        vert: vk.PipelineShaderStageCreateInfo
+        if s, res := vulkan_create_shader_stage(vulkan.device, "build/debug/shader_vert.spv", .VERTEX); res != .SUCCESS {
+            app_panic("Failed to create vertex shader stage.")
+        } else {
+            vert = s
+        }
+        defer vulkan_destroy_shader_stage(vulkan.device, vert)
+
+        frag: vk.PipelineShaderStageCreateInfo
+        if s, res := vulkan_create_shader_stage(vulkan.device, "build/debug/shader_frag.spv", .FRAGMENT); res != .SUCCESS {
+            app_panic("Failed to create fragment shader stage.")
+        } else {
+            frag = s
+        }
+        defer vulkan_destroy_shader_stage(vulkan.device, frag)
+
+        shader_stages := []vk.PipelineShaderStageCreateInfo {
+            vert,
+            frag,
+        }
+
+        if p, res := vulkan_create_graphics_pipeline(&vulkan, shader_stages, pipeline_layout = pipeline_layout); res != .SUCCESS {
+            app_panic("Failed to create graphics pipeline!")
+        } else {
+            pipeline = p
+        }
     }
 
     for app_update() {
