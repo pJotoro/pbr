@@ -42,13 +42,13 @@ cgltf_load :: proc(name: string) -> (out_data: ^cgltf.data, res: cgltf.result) {
 Model :: struct {
 	vertex_buffer_regions: [dynamic]vk.BufferCopy,
 	index_buffer_regions: [dynamic]vk.BufferCopy,
-	vertex_buffer: vk.Buffer,
-	index_buffer: vk.Buffer,
+	vertex_buffer: vk.Buffer, vertex_buffer_size: vk.DeviceSize,
+	index_buffer: vk.Buffer, index_buffer_size: vk.DeviceSize,
 	staging_buffer: vk.Buffer,
 	staging_buffer_data: []byte,
 }
 
-vulkan_load_cgltf :: proc(vulkan: ^Vulkan, vulkan_allocator: ^Vulkan_Allocator) -> Model {
+vulkan_load_cgltf :: proc(vulkan: ^Vulkan, vulkan_allocator: ^Vulkan_Allocator) -> (model: Model, res: vk.Result) {
 	/*
 	Parts of gltf file I don't handle yet that I have to:
 
@@ -65,8 +65,12 @@ vulkan_load_cgltf :: proc(vulkan: ^Vulkan, vulkan_allocator: ^Vulkan_Allocator) 
 	index_buffer_size: vk.DeviceSize
 	index_buffer_regions := make([dynamic]vk.BufferCopy)
 
-	data, res := cgltf_load("assets/chocolate_donut.glb")
-	assert(res == .success)
+	data: ^cgltf.data
+	if d, r := cgltf_load("assets/chocolate_donut.glb"); r != .success {
+		panic("Failed to load assets/chocolate_donut.glb")
+	} else {
+		data = d
+	}
 
 	assert(data.file_type == .glb)
 	assert(data.file_data == nil)
@@ -545,29 +549,29 @@ vulkan_load_cgltf :: proc(vulkan: ^Vulkan, vulkan_allocator: ^Vulkan_Allocator) 
 
 	assert(vertex_buffer_size + index_buffer_size == vk.DeviceSize(len(data.bin)))
 
-	vertex_buffer, _ := vulkan_create_buffer(vulkan, vulkan_allocator, 
+	vertex_buffer := vulkan_create_buffer(vulkan, vulkan_allocator, 
 		vertex_buffer_size, 
-		{.TRANSFER_DST, .VERTEX_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE})
+		{.TRANSFER_DST, .VERTEX_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE}) or_return
 
-	index_buffer, _ := vulkan_create_buffer(vulkan, vulkan_allocator, 
+	index_buffer := vulkan_create_buffer(vulkan, vulkan_allocator, 
 		index_buffer_size, 
-		{.TRANSFER_DST, .INDEX_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE})
+		{.TRANSFER_DST, .INDEX_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE}) or_return
 
-	staging_buffer, _ := vulkan_create_buffer(vulkan, vulkan_allocator, 
+	staging_buffer := vulkan_create_buffer(vulkan, vulkan_allocator, 
 		vertex_buffer_size + index_buffer_size, 
-		{.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT}, {.DEVICE_LOCAL})
+		{.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT}, {.DEVICE_LOCAL}) or_return
 
-	model := Model {
+	model = Model {
 		vertex_buffer_regions = vertex_buffer_regions,
 		index_buffer_regions = index_buffer_regions,
-		vertex_buffer = vertex_buffer,
-		index_buffer = staging_buffer,
+		vertex_buffer = vertex_buffer, vertex_buffer_size = vertex_buffer_size,
+		index_buffer = staging_buffer, index_buffer_size = index_buffer_size,
 		staging_buffer = staging_buffer,
 		staging_buffer_data = make([]byte, vertex_buffer_size + index_buffer_size)
 	}
 	copy(model.staging_buffer_data, data.bin)
 
-	return model
+	return
 }
 
 vulkan_get_format_from_cgltf_component_type_and_cgltf_type :: #force_inline proc "contextless" (cgltf_component_type: cgltf.component_type, cgltf_type: cgltf.type) -> vk.Format {
