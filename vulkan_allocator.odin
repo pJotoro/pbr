@@ -2,7 +2,6 @@ package pbr
 
 import vk "vendor:vulkan"
 import "core:mem"
-import "core:slice"
 
 // TODO: Add support for Vulkan 1.0.
 

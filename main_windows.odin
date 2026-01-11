@@ -6,8 +6,6 @@ import "base:intrinsics"
 import "base:runtime"
 import "core:strings"
 
-foreign import user32 "system:User32.lib"
-
 VULKAN_LIB_NAME :: "vulkan-1.dll"
 VK_KHR_platform_surface :: "VK_KHR_win32_surface"
 
