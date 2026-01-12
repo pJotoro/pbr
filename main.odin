@@ -49,87 +49,90 @@ main :: proc() {
     }
     #assert(size_of(Vertex) == 32)
 
-    vertex_input_bindings := [?]vk.VertexInputBindingDescription {
-        {
-            binding = 0,
-            stride = size_of(Instance),
-            inputRate = .INSTANCE,
-        },
-        {
-            binding = 1,
-            stride = size_of(Vertex),
-            inputRate = .VERTEX,
-        },
-    }
-
-    vertex_input_attributes := [?]vk.VertexInputAttributeDescription {
-        {
-            location = 0,
-            binding = 0,
-            format = .R32G32B32_SFLOAT,
-            offset = u32(offset_of(Instance, translation)),
-        },
-        {
-            location = 1,
-            binding = 0,
-            format = .R32G32B32A32_SFLOAT,
-            offset = u32(offset_of(Instance, rotation)),
-        },
-        {
-            location = 2,
-            binding = 0,
-            format = .R32G32B32_SFLOAT,
-            offset = u32(offset_of(Instance, scale)),
-        },
-        {
-            location = 3,
-            binding = 1,
-            format = .R32G32B32_SFLOAT,
-            offset = u32(offset_of(Vertex, pos)),
-        },
-        {
-            location = 4,
-            binding = 1,
-            format = .R32G32B32_SFLOAT,
-            offset = u32(offset_of(Vertex, normal)),
-        },
-        {
-            location = 5,
-            binding = 1,
-            format = .R32G32_SFLOAT,
-            offset = u32(offset_of(Vertex, texcoord)),
-        },
-    }
-
-    vertex_input := vk.PipelineVertexInputStateCreateInfo {
-        sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        vertexBindingDescriptionCount = u32(len(vertex_input_bindings)),
-        pVertexBindingDescriptions = raw_data(vertex_input_bindings[:]),
-        vertexAttributeDescriptionCount = u32(len(vertex_input_attributes)),
-        pVertexAttributeDescriptions = raw_data(vertex_input_attributes[:]),
-    }
-
-    pipeline: vk.Pipeline
-    {
-        vert, res1 := vulkan_create_shader_stage(vulkan.device, "build/debug/donut_vert.spv", .VERTEX)
+    blah :: proc(vulkan: ^Vulkan, vulkan_allocator: ^Vulkan_Allocator) -> (pipeline: vk.Pipeline, model: Model, res: vk.Result) {
+        vert := vulkan_create_shader_stage(vulkan.device, "build/debug/donut_vert.spv", .VERTEX) or_return
         defer vulkan_destroy_shader_stage(vulkan.device, vert)
 
-        frag, res2 := vulkan_create_shader_stage(vulkan.device, "build/debug/donut_frag.spv", .FRAGMENT)
+        frag := vulkan_create_shader_stage(vulkan.device, "build/debug/donut_frag.spv", .FRAGMENT) or_return
         defer vulkan_destroy_shader_stage(vulkan.device, frag)
 
-        pipeline, res3 := vulkan_create_graphics_pipeline(&vulkan, shader_stages = {vert, frag}, vertex_input_state = &vertex_input)
+        vertex_input_bindings := [?]vk.VertexInputBindingDescription {
+            {
+                binding = 0,
+                stride = size_of(Instance),
+                inputRate = .INSTANCE,
+            },
+            {
+                binding = 1,
+                stride = size_of(Vertex),
+                inputRate = .VERTEX,
+            },
+        }
+
+        vertex_input_attributes := [?]vk.VertexInputAttributeDescription {
+            {
+                location = 0,
+                binding = 0,
+                format = .R32G32B32_SFLOAT,
+                offset = u32(offset_of(Instance, translation)),
+            },
+            {
+                location = 1,
+                binding = 0,
+                format = .R32G32B32A32_SFLOAT,
+                offset = u32(offset_of(Instance, rotation)),
+            },
+            {
+                location = 2,
+                binding = 0,
+                format = .R32G32B32_SFLOAT,
+                offset = u32(offset_of(Instance, scale)),
+            },
+            {
+                location = 3,
+                binding = 1,
+                format = .R32G32B32_SFLOAT,
+                offset = u32(offset_of(Vertex, pos)),
+            },
+            {
+                location = 4,
+                binding = 1,
+                format = .R32G32B32_SFLOAT,
+                offset = u32(offset_of(Vertex, normal)),
+            },
+            {
+                location = 5,
+                binding = 1,
+                format = .R32G32_SFLOAT,
+                offset = u32(offset_of(Vertex, texcoord)),
+            },
+        }
+
+        vertex_input := vk.PipelineVertexInputStateCreateInfo {
+            sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+            vertexBindingDescriptionCount = u32(len(vertex_input_bindings)),
+            pVertexBindingDescriptions = raw_data(vertex_input_bindings[:]),
+            vertexAttributeDescriptionCount = u32(len(vertex_input_attributes)),
+            pVertexAttributeDescriptions = raw_data(vertex_input_attributes[:]),
+        }
+
+        pipeline = vulkan_create_graphics_pipeline(vulkan, shader_stages = {vert, frag}, vertex_input_state = &vertex_input) or_return
+
+        model = vulkan_load_cgltf(vulkan, vulkan_allocator) or_return
+
+        vulkan_alloc(vulkan, vulkan_allocator) or_return
+
+        {
+            data := vulkan_map_memory_buffer(vulkan, vulkan_allocator, model.staging_buffer, 0, vk.DeviceSize(len(model.staging_buffer_data))) or_return
+            copy(data, model.staging_buffer_data)
+            vulkan_unmap_memory_buffer(vulkan, vulkan_allocator, model.staging_buffer)
+        }
+
+        return
     }
 
-    model, res1 := vulkan_load_cgltf(&vulkan, &vulkan_allocator)
-
-    res2 := vulkan_alloc(&vulkan, &vulkan_allocator)
-    assert(res1 == .SUCCESS && res2 == .SUCCESS)
-
-    {
-        data, _ := vulkan_map_memory_buffer(&vulkan, &vulkan_allocator, model.staging_buffer, 0, vk.DeviceSize(len(model.staging_buffer_data)))
-        copy(data, model.staging_buffer_data)
-        vulkan_unmap_memory_buffer(&vulkan, &vulkan_allocator, model.staging_buffer)
-    }
+    pipeline, model, res := blah(&vulkan, &vulkan_allocator)
+    assert(res == .SUCCESS)
 
     for app_update() {
         cb: vk.CommandBuffer
