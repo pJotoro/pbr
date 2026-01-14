@@ -1,10 +1,11 @@
 package pbr
 
-import vk "vendor:vulkan"
-import win32 "core:sys/windows"
-import "base:intrinsics"
 import "base:runtime"
+
+import win32 "core:sys/windows"
 import "core:strings"
+
+import vk "vendor:vulkan"
 
 VULKAN_LIB_NAME :: "vulkan-1.dll"
 VK_KHR_platform_surface :: "VK_KHR_win32_surface"
@@ -113,8 +114,8 @@ _app_init :: proc() -> (w, h: int, refresh_rate: int, ok: bool) {
     return
 }
 
-vulkan_create_surface :: proc(vulkan: ^Vulkan) -> (surface: vk.SurfaceKHR, res: vk.Result) {
-	res = vk.CreateWin32SurfaceKHR(
+vulkan_create_surface :: proc(vulkan: ^Vulkan) -> (surface: vk.SurfaceKHR) {
+	res := vk.CreateWin32SurfaceKHR(
         vulkan.instance,
         &vk.Win32SurfaceCreateInfoKHR{
             sType = .WIN32_SURFACE_CREATE_INFO_KHR,
@@ -123,6 +124,7 @@ vulkan_create_surface :: proc(vulkan: ^Vulkan) -> (surface: vk.SurfaceKHR, res: 
         }, 
         nil,
         &surface)
+    CHECK(res)
 	return
 }
 
