@@ -40,31 +40,11 @@ cgltf_load :: proc(name: string) -> (out_data: ^cgltf.data, res: cgltf.result) {
 }
 
 Model :: struct {
-	vertex_buffer_regions: [dynamic]vk.BufferCopy,
-	index_buffer_regions: [dynamic]vk.BufferCopy,
-	vertex_buffer: vk.Buffer, vertex_buffer_size: vk.DeviceSize,
-	index_buffer: vk.Buffer, index_buffer_size: vk.DeviceSize,
-	staging_buffer: vk.Buffer,
-	staging_buffer_data: []byte,
+	vertex_buffer, vertex_buffer_staging_buffer: vk.Buffer, vertex_buffer_data: []byte,
+	index_buffer, index_buffer_staging_buffer: vk.Buffer, index_buffer_data: []byte,
 }
 
 vulkan_load_cgltf :: proc(vulkan: ^Vulkan, vulkan_allocator: ^Vulkan_Allocator) -> (model: Model, res: vk.Result) {
-	/*
-	Parts of gltf file I don't handle yet that I have to:
-
-	meshes
-	materials
-	accessors
-	nodes
-	extensions    
-	*/
-
-	vertex_buffer_size: vk.DeviceSize
-	vertex_buffer_regions := make([dynamic]vk.BufferCopy)
-
-	index_buffer_size: vk.DeviceSize
-	index_buffer_regions := make([dynamic]vk.BufferCopy)
-
 	data: ^cgltf.data
 	if d, r := cgltf_load("assets/chocolate_donut.glb"); r != .success {
 		panic("Failed to load assets/chocolate_donut.glb")
@@ -217,21 +197,8 @@ vulkan_load_cgltf :: proc(vulkan: ^Vulkan, vulkan_allocator: ^Vulkan_Allocator) 
 		assert(buffer_view.stride == 0)
 		switch buffer_view.type {
 			case .invalid:
-
 			case .vertices:
-				append(&vertex_buffer_regions, vk.BufferCopy{
-					srcOffset = vk.DeviceSize(buffer_view.offset),
-					dstOffset = vertex_buffer_size,
-					size = vk.DeviceSize(buffer_view.size),
-				})
-				vertex_buffer_size += vk.DeviceSize(buffer_view.size)
 			case .indices:
-				append(&index_buffer_regions, vk.BufferCopy{
-					srcOffset = vk.DeviceSize(buffer_view.offset),
-					dstOffset = index_buffer_size,
-					size = vk.DeviceSize(buffer_view.size),
-				})
-				index_buffer_size += vk.DeviceSize(buffer_view.size)
 		}
 		assert(buffer_view.data == nil)
 		assert(!buffer_view.has_meshopt_compression)
@@ -547,29 +514,37 @@ vulkan_load_cgltf :: proc(vulkan: ^Vulkan, vulkan_allocator: ^Vulkan_Allocator) 
 	// data.extensions_used = ["KHR_materials_specular", "KHR_materials_ior"]
 	assert(data.extensions_required == nil)
 
-	assert(vertex_buffer_size + index_buffer_size == vk.DeviceSize(len(data.bin)))
-
-	vertex_buffer := vulkan_create_buffer(vulkan, vulkan_allocator, 
-		vertex_buffer_size, 
-		{.TRANSFER_DST, .VERTEX_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE}) or_return
-
-	index_buffer := vulkan_create_buffer(vulkan, vulkan_allocator, 
-		index_buffer_size, 
-		{.TRANSFER_DST, .INDEX_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE}) or_return
-
-	staging_buffer := vulkan_create_buffer(vulkan, vulkan_allocator, 
-		vertex_buffer_size + index_buffer_size, 
-		{.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT}, {.DEVICE_LOCAL}) or_return
-
-	model = Model {
-		vertex_buffer_regions = vertex_buffer_regions,
-		index_buffer_regions = index_buffer_regions,
-		vertex_buffer = vertex_buffer, vertex_buffer_size = vertex_buffer_size,
-		index_buffer = staging_buffer, index_buffer_size = index_buffer_size,
-		staging_buffer = staging_buffer,
-		staging_buffer_data = make([]byte, vertex_buffer_size + index_buffer_size)
+	for node in data.nodes {
+		if node.name == "Donut" {
+			// NOTE: Next time you code, just figure out how to render the Donut. Don't care about any of the other nodes in the scene.
+			// You can always render those later. Also, start out by using two separate buffers for vertices and instances. Later on, you can
+			// see if you can figure out a way to merge them into the same buffer.
+		}
 	}
-	copy(model.staging_buffer_data, data.bin)
+
+	// assert(vertex_buffer_size + index_buffer_size == vk.DeviceSize(len(data.bin)))
+
+	// vertex_buffer := vulkan_create_buffer(vulkan, vulkan_allocator, 
+	// 	vertex_buffer_size, 
+	// 	{.TRANSFER_DST, .VERTEX_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE}) or_return
+
+	// index_buffer := vulkan_create_buffer(vulkan, vulkan_allocator, 
+	// 	index_buffer_size, 
+	// 	{.TRANSFER_DST, .INDEX_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE}) or_return
+
+	// staging_buffer := vulkan_create_buffer(vulkan, vulkan_allocator, 
+	// 	vertex_buffer_size + index_buffer_size, 
+	// 	{.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT}, {.DEVICE_LOCAL}) or_return
+
+	// model = Model {
+	// 	vertex_buffer_regions = vertex_buffer_regions,
+	// 	index_buffer_regions = index_buffer_regions,
+	// 	vertex_buffer = vertex_buffer, vertex_buffer_size = vertex_buffer_size,
+	// 	index_buffer = staging_buffer, index_buffer_size = index_buffer_size,
+	// 	staging_buffer = staging_buffer,
+	// 	staging_buffer_data = make([]byte, vertex_buffer_size + index_buffer_size)
+	// }
+	// copy(model.staging_buffer_data, data.bin)
 
 	return
 }
