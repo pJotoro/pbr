@@ -234,7 +234,7 @@ main :: proc() {
     } else {
         instance_extension_count: u32
         CHECK(vk.EnumerateInstanceExtensionProperties(nil, &instance_extension_count, nil))
-        instance_extension_properties := make([]vk.ExtensionProperties, instance_extension_count, arena)
+        instance_extension_properties := make([]vk.ExtensionProperties, instance_extension_count, vulkan.arena)
         CHECK(vk.EnumerateInstanceExtensionProperties(nil, &instance_extension_count, raw_data(instance_extension_properties)))
     }
 
@@ -495,9 +495,9 @@ main :: proc() {
         }
     } else {
         device_extension_count: u32
-        CHECK(vk.EnumerateDeviceExtensionProperties(physical_device, nil, &device_extension_count, nil))
+        CHECK(vk.EnumerateDeviceExtensionProperties(vulkan.physical_device, nil, &device_extension_count, nil))
         device_extension_properties := make([]vk.ExtensionProperties, device_extension_count, context.temp_allocator)
-        CHECK(vk.EnumerateDeviceExtensionProperties(physical_device, nil, &device_extension_count, raw_data(device_extension_properties)))
+        CHECK(vk.EnumerateDeviceExtensionProperties(vulkan.physical_device, nil, &device_extension_count, raw_data(device_extension_properties)))
     }
 
     required_device_extensions := [?]cstring {
@@ -717,167 +717,6 @@ main :: proc() {
         CHECK(vk.CreateFramebuffer(vulkan.device, &info, nil, &vulkan.swapchain_framebuffers[idx]))
     }
 
-    CHECK(vk.CreatePipelineCache(vulkan.device, &{sType = .PIPELINE_CACHE_CREATE_INFO}, nil, &vulkan.pipeline_cache))
-
-    vulkan_allocator := vulkan_create_allocator()
-
-    Instance :: struct {
-        translation: Vector3,
-        rotation: Vector4,
-        scale: Vector3,
-    }
-    #assert(size_of(Instance) == 40)
-
-    Vertex :: struct {
-        pos: Vector3,
-        normal: Vector3,
-        texcoord: Vector2,
-    }
-    #assert(size_of(Vertex) == 32)
-
-    vert := vulkan_create_shader_stage(vulkan.device, "build/debug/donut_vert.spv", .VERTEX)
-    frag := vulkan_create_shader_stage(vulkan.device, "build/debug/donut_frag.spv", .FRAGMENT)
-
-    stages := [?]vk.PipelineShaderStageCreateInfo {vert, frag}
-
-    vertex_input_bindings := [?]vk.VertexInputBindingDescription {
-        {
-            binding = 0,
-            stride = size_of(Instance),
-            inputRate = .INSTANCE,
-        },
-        {
-            binding = 1,
-            stride = size_of(Vertex),
-            inputRate = .VERTEX,
-        },
-    }
-
-    vertex_input_attributes := [?]vk.VertexInputAttributeDescription {
-        {
-            location = 0,
-            binding = 0,
-            format = .R32G32B32_SFLOAT,
-            offset = u32(offset_of(Instance, translation)),
-        },
-        {
-            location = 1,
-            binding = 0,
-            format = .R32G32B32A32_SFLOAT,
-            offset = u32(offset_of(Instance, rotation)),
-        },
-        {
-            location = 2,
-            binding = 0,
-            format = .R32G32B32_SFLOAT,
-            offset = u32(offset_of(Instance, scale)),
-        },
-        {
-            location = 3,
-            binding = 1,
-            format = .R32G32B32_SFLOAT,
-            offset = u32(offset_of(Vertex, pos)),
-        },
-        {
-            location = 4,
-            binding = 1,
-            format = .R32G32B32_SFLOAT,
-            offset = u32(offset_of(Vertex, normal)),
-        },
-        {
-            location = 5,
-            binding = 1,
-            format = .R32G32_SFLOAT,
-            offset = u32(offset_of(Vertex, texcoord)),
-        },
-    }
-
-    vertex_input_state := vk.PipelineVertexInputStateCreateInfo {
-        sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        vertexBindingDescriptionCount = u32(len(vertex_input_bindings)),
-        pVertexBindingDescriptions = raw_data(vertex_input_bindings[:]),
-        vertexAttributeDescriptionCount = u32(len(vertex_input_attributes)),
-        pVertexAttributeDescriptions = raw_data(vertex_input_attributes[:]),
-    }
-
-    input_assembly_state := vk.PipelineInputAssemblyStateCreateInfo {
-        sType = .PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        topology = .TRIANGLE_LIST,
-    }
-
-    viewport := vk.Viewport {
-        width = f32(vulkan.swapchain_extent.width),
-        height = f32(vulkan.swapchain_extent.height),
-        maxDepth = 1.0,
-    }
-    scissor := vk.Rect2D {
-        extent = vulkan.swapchain_extent,
-    }
-    viewport_state := vk.PipelineViewportStateCreateInfo {
-        sType = .PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-        viewportCount = 1,
-        pViewports = &viewport,
-        scissorCount = 1,
-        pScissors = &scissor,
-    }
-
-    rasterization_state := vk.PipelineRasterizationStateCreateInfo {
-        sType = .PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        polygonMode = .FILL,
-        cullMode = {},
-        frontFace = .COUNTER_CLOCKWISE,
-        lineWidth = 1.0,
-    }
-
-    multisample_state := vk.PipelineMultisampleStateCreateInfo {
-        sType = .PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        rasterizationSamples = {._1},
-    }
-
-    color_blend_attachment_state := vk.PipelineColorBlendAttachmentState {
-        colorWriteMask = {.R, .G, .B, .A},
-    }
-    color_blend_state := vk.PipelineColorBlendStateCreateInfo {
-        sType = .PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-        attachmentCount = 1,
-        pAttachments = &color_blend_attachment_state,
-    }
-
-    dynamic_state := vk.PipelineDynamicStateCreateInfo {
-        sType = .PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-    }
-
-    pipeline_layout: vk.PipelineLayout
-    CHECK(vk.CreatePipelineLayout(vulkan.device, &{sType = .PIPELINE_LAYOUT_CREATE_INFO}, nil, &pipeline_layout))
-
-    pipeline_info := vk.GraphicsPipelineCreateInfo {
-        sType = .GRAPHICS_PIPELINE_CREATE_INFO,
-        flags = {},
-        stageCount = u32(len(stages)),
-        pStages = raw_data(stages[:]),
-        pVertexInputState = &vertex_input_state,
-        pInputAssemblyState = &input_assembly_state,
-        pViewportState = &viewport_state,
-        pRasterizationState = &rasterization_state,
-        pMultisampleState = &multisample_state,
-        pColorBlendState = &color_blend_state,
-        pDynamicState = &dynamic_state,
-        layout = pipeline_layout,
-        renderPass = vulkan.render_pass,
-    }
-    when VULKAN_DISABLE_PIPELINE_OPTIMIZATION {
-        pipeline_info.flags += {.DISABLE_OPTIMIZATION}
-    }
-
-    graphics_pipeline: vk.Pipeline
-    CHECK(vk.CreateGraphicsPipelines(
-        device = vulkan.device,
-        pipelineCache = vulkan.pipeline_cache,
-        createInfoCount = 1,
-        pCreateInfos = &pipeline_info,
-        pAllocator = nil,
-        pPipelines = &graphics_pipeline))
-
     cgltf_data: ^cgltf.data
     if d, r := cgltf_load("assets/chocolate_donut.glb"); r != .success {
         panic("Failed to load assets/chocolate_donut.glb")
@@ -1022,22 +861,6 @@ main :: proc() {
 
         assert(accessor.extras == {})
         assert(accessor.extensions_count == 0)
-    }
-
-    for buffer_view in cgltf_data.buffer_views {
-        // buffer_view.name
-        assert(buffer_view.buffer != nil)
-        assert(buffer_view.stride == 0)
-        switch buffer_view.type {
-            case .invalid:
-            case .vertices:
-            case .indices:
-        }
-        assert(buffer_view.data == nil)
-        assert(!buffer_view.has_meshopt_compression)
-        assert(buffer_view.meshopt_compression == {})
-        assert(buffer_view.extras == {})
-        assert(buffer_view.extensions_count == 0)
     }
 
     assert(len(cgltf_data.buffers) == 1)
@@ -1347,45 +1170,327 @@ main :: proc() {
     // cgltf_data.extensions_used = ["KHR_materials_specular", "KHR_materials_ior"]
     assert(cgltf_data.extensions_required == nil)
 
+    vertex_buffer_size, index_buffer_size, uniform_buffer_size: vk.DeviceSize
+
+    for buffer_view in cgltf_data.buffer_views {
+        // buffer_view.name
+        assert(buffer_view.buffer != nil)
+        assert(buffer_view.stride == 0)
+        switch buffer_view.type {
+            case .invalid:
+            case .vertices:
+                vertex_buffer_size += vk.DeviceSize(buffer_view.size)
+            case .indices:
+                index_buffer_size += vk.DeviceSize(buffer_view.size)
+        }
+        assert(buffer_view.data == nil)
+        assert(!buffer_view.has_meshopt_compression)
+        assert(buffer_view.meshopt_compression == {})
+        assert(buffer_view.extras == {})
+        assert(buffer_view.extensions_count == 0)
+    }
+
     for node in cgltf_data.nodes {
         if node.name == "Donut" {
-            // NOTE: Next time you code, just figure out how to render the Donut. Don't care about any of the other nodes in the scene.
-            // You can always render those later. Also, start out by using two separate buffers for vertices and instances. Later on, you can
-            // see if you can figure out a way to merge them into the same buffer.
+            assert(node.has_translation == true)
+            uniform_buffer_size += size_of(Vector3)
+            assert(node.has_rotation == true)
+            uniform_buffer_size += size_of(Vector4)
+            assert(node.has_scale == true)
+            uniform_buffer_size += size_of(Vector3)
         }
     }
 
-    // assert(vertex_buffer_size + index_buffer_size == vk.DeviceSize(len(data.bin)))
+    assert(vertex_buffer_size + index_buffer_size == vk.DeviceSize(len(cgltf_data.bin)))
 
-    // vertex_buffer := vulkan_create_buffer(vulkan, vulkan_allocator, 
-    //  vertex_buffer_size, 
-    //  {.TRANSFER_DST, .VERTEX_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE}) or_return
+    vulkan_allocator := vulkan_create_allocator()
 
-    // index_buffer := vulkan_create_buffer(vulkan, vulkan_allocator, 
-    //  index_buffer_size, 
-    //  {.TRANSFER_DST, .INDEX_BUFFER}, {.DEVICE_LOCAL}, {.HOST_VISIBLE}) or_return
+    vertex_buffer := vulkan_create_buffer(
+        &vulkan, &vulkan_allocator, 
+        vertex_buffer_size, 
+        {.TRANSFER_DST, .VERTEX_BUFFER}, 
+        {.DEVICE_LOCAL}, {.HOST_VISIBLE})
 
-    // staging_buffer := vulkan_create_buffer(vulkan, vulkan_allocator, 
-    //  vertex_buffer_size + index_buffer_size, 
-    //  {.TRANSFER_SRC}, {.HOST_VISIBLE, .HOST_COHERENT}, {.DEVICE_LOCAL}) or_return
+    index_buffer := vulkan_create_buffer(
+        &vulkan, &vulkan_allocator, 
+        index_buffer_size, 
+        {.TRANSFER_DST, .INDEX_BUFFER}, 
+        {.DEVICE_LOCAL}, {.HOST_VISIBLE})
 
-    // model = Model {
-    //  vertex_buffer_regions = vertex_buffer_regions,
-    //  index_buffer_regions = index_buffer_regions,
-    //  vertex_buffer = vertex_buffer, vertex_buffer_size = vertex_buffer_size,
-    //  index_buffer = staging_buffer, index_buffer_size = index_buffer_size,
-    //  staging_buffer = staging_buffer,
-    //  staging_buffer_data = make([]byte, vertex_buffer_size + index_buffer_size)
-    // }
-    // copy(model.staging_buffer_data, data.bin)
+    uniform_buffer := vulkan_create_buffer(
+        &vulkan, &vulkan_allocator, 
+        uniform_buffer_size, 
+        {.TRANSFER_DST, .UNIFORM_BUFFER}, 
+        {.DEVICE_LOCAL}, {.HOST_VISIBLE})
 
-    CHECK(vulkan_alloc(&vulkan, &vulkan_allocator))
+    vertex_buffer_staging_buffer := vulkan_create_buffer(
+        &vulkan, &vulkan_allocator, 
+        vertex_buffer_size, 
+        {.TRANSFER_SRC}, 
+        {.HOST_VISIBLE, .HOST_COHERENT}, {.DEVICE_LOCAL})
 
-    // {
-    //     data := vulkan_map_memory_buffer(vulkan, vulkan_allocator, model.staging_buffer, 0, vk.DeviceSize(len(model.staging_buffer_data))) or_return
-    //     copy(data, model.staging_buffer_data)
-    //     vulkan_unmap_memory_buffer(vulkan, vulkan_allocator, model.staging_buffer)
-    // }
+    index_buffer_staging_buffer := vulkan_create_buffer(
+        &vulkan, &vulkan_allocator, 
+        index_buffer_size, 
+        {.TRANSFER_SRC}, 
+        {.HOST_VISIBLE, .HOST_COHERENT}, {.DEVICE_LOCAL})
+
+    uniform_buffer_staging_buffer := vulkan_create_buffer(
+        &vulkan, &vulkan_allocator, 
+        uniform_buffer_size, 
+        {.TRANSFER_SRC}, 
+        {.HOST_VISIBLE, .HOST_COHERENT}, {.DEVICE_LOCAL})
+
+    vulkan_alloc(&vulkan, &vulkan_allocator)
+
+    {
+        data := vulkan_map_memory(&vulkan, &vulkan_allocator, vertex_buffer_staging_buffer, 0, vertex_buffer_size)
+        defer vulkan_unmap_memory(&vulkan, &vulkan_allocator, vertex_buffer_staging_buffer)
+
+        offset := vk.DeviceSize(0)
+        for buffer_view in cgltf_data.buffer_views {
+            if buffer_view.type == .vertices {
+                copy(data, cgltf_data.bin[int(offset):int(offset)+int(buffer_view.size)])
+                offset += vk.DeviceSize(buffer_view.size)
+            }
+        }
+    }
+
+    {
+        data := vulkan_map_memory(&vulkan, &vulkan_allocator, index_buffer_staging_buffer, 0, index_buffer_size)
+        defer vulkan_unmap_memory(&vulkan, &vulkan_allocator, index_buffer_staging_buffer)
+
+        offset := vk.DeviceSize(0)
+        for buffer_view in cgltf_data.buffer_views {
+            if buffer_view.type == .indices {
+                copy(data, cgltf_data.bin[int(offset):int(offset)+int(buffer_view.size)])
+                offset += vk.DeviceSize(buffer_view.size)
+            }
+        }
+    }
+
+    Uniforms :: struct {
+        translation: Vector3,
+        rotation: Vector4,
+        scale: Vector3,
+    }
+    #assert(size_of(Uniforms) == 40)
+
+    Vertex :: struct {
+        pos: Vector3,
+        normal: Vector3,
+        texcoord: Vector2,
+    }
+    #assert(size_of(Vertex) == 32)
+
+    {
+        data := vulkan_map_memory(&vulkan, &vulkan_allocator, uniform_buffer_staging_buffer, 0, uniform_buffer_size)
+        defer vulkan_unmap_memory(&vulkan, &vulkan_allocator, uniform_buffer_staging_buffer)
+
+        for &node in cgltf_data.nodes {
+            if node.name == "Donut" {
+                intrinsics.mem_copy(&data[0], &node.translation, size_of(Vector3))
+                intrinsics.mem_copy(&data[size_of(Vector3)], &node.rotation, size_of(Vector4))
+                intrinsics.mem_copy(&data[size_of(Vector3) + size_of(Vector4)], &node.scale, size_of(Vector3))
+
+                break
+            }
+        }
+    }
+
+    descriptor_set_layout: vk.DescriptorSetLayout
+    descriptor_set_layout_binding := vk.DescriptorSetLayoutBinding {
+        binding = 0,
+        descriptorType = .UNIFORM_BUFFER,
+        descriptorCount = 1,
+        stageFlags = {.VERTEX},
+    }
+    descriptor_set_layout_info := vk.DescriptorSetLayoutCreateInfo {
+        sType = .DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        bindingCount = 1,
+        pBindings = &descriptor_set_layout_binding,
+    }
+    CHECK(vk.CreateDescriptorSetLayout(
+        vulkan.device,
+        &descriptor_set_layout_info,
+        nil,
+        &descriptor_set_layout))
+
+    descriptor_pool_size := vk.DescriptorPoolSize {
+        type = .UNIFORM_BUFFER,
+        descriptorCount = u32(len(vulkan.frames)),
+    }
+
+    descriptor_pool_info := vk.DescriptorPoolCreateInfo {
+        sType = .DESCRIPTOR_POOL_CREATE_INFO,
+        maxSets = u32(len(vulkan.frames)),
+        poolSizeCount = 1,
+        pPoolSizes = &descriptor_pool_size,
+    }
+
+    descriptor_pool: vk.DescriptorPool
+    CHECK(vk.CreateDescriptorPool(
+        vulkan.device,
+        &descriptor_pool_info,
+        nil,
+        &descriptor_pool))
+
+    descriptor_set_allocate_info := vk.DescriptorSetAllocateInfo {
+        sType = .DESCRIPTOR_SET_ALLOCATE_INFO,
+        descriptorPool = descriptor_pool,
+        descriptorSetCount = 1,
+        pSetLayouts = &descriptor_set_layout,
+    }
+
+    descriptor_set: vk.DescriptorSet
+    CHECK(vk.AllocateDescriptorSets(
+        vulkan.device,
+        &descriptor_set_allocate_info,
+        &descriptor_set))
+
+    descriptor_buffer_info := vk.DescriptorBufferInfo {
+        buffer = uniform_buffer,
+        offset = 0,
+        range = size_of(Uniforms),
+    }
+
+    write_descriptor_set := vk.WriteDescriptorSet {
+        sType = .WRITE_DESCRIPTOR_SET,
+        dstSet = descriptor_set,
+        dstBinding = 0,
+        descriptorCount = 1,
+        descriptorType = .UNIFORM_BUFFER,
+        pBufferInfo = &descriptor_buffer_info,
+    }
+
+    vk.UpdateDescriptorSets(vulkan.device, 1, &write_descriptor_set, 0, nil)
+
+    pipeline_layout_info := vk.PipelineLayoutCreateInfo {
+        sType = .PIPELINE_LAYOUT_CREATE_INFO,
+        setLayoutCount = 1,
+        pSetLayouts = &descriptor_set_layout,
+    }
+    pipeline_layout: vk.PipelineLayout
+    CHECK(vk.CreatePipelineLayout(vulkan.device, &pipeline_layout_info, nil, &pipeline_layout))
+
+    CHECK(vk.CreatePipelineCache(vulkan.device, &{sType = .PIPELINE_CACHE_CREATE_INFO}, nil, &vulkan.pipeline_cache))
+
+    vert := vulkan_create_shader_stage(vulkan.device, "build/debug/donut_vert.spv", .VERTEX)
+    frag := vulkan_create_shader_stage(vulkan.device, "build/debug/donut_frag.spv", .FRAGMENT)
+
+    stages := [?]vk.PipelineShaderStageCreateInfo {vert, frag}
+
+    vertex_input_bindings := [?]vk.VertexInputBindingDescription {
+        {
+            binding = 0,
+            stride = size_of(Vertex),
+            inputRate = .VERTEX,
+        },
+    }
+
+    vertex_input_attributes := [?]vk.VertexInputAttributeDescription {
+        {
+            location = 0,
+            binding = 0,
+            format = .R32G32B32_SFLOAT,
+            offset = u32(offset_of(Vertex, pos)),
+        },
+        {
+            location = 1,
+            binding = 0,
+            format = .R32G32B32_SFLOAT,
+            offset = u32(offset_of(Vertex, normal)),
+        },
+        {
+            location = 2,
+            binding = 0,
+            format = .R32G32_SFLOAT,
+            offset = u32(offset_of(Vertex, texcoord)),
+        },
+    }
+
+    vertex_input_state := vk.PipelineVertexInputStateCreateInfo {
+        sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        vertexBindingDescriptionCount = u32(len(vertex_input_bindings)),
+        pVertexBindingDescriptions = raw_data(vertex_input_bindings[:]),
+        vertexAttributeDescriptionCount = u32(len(vertex_input_attributes)),
+        pVertexAttributeDescriptions = raw_data(vertex_input_attributes[:]),
+    }
+
+    input_assembly_state := vk.PipelineInputAssemblyStateCreateInfo {
+        sType = .PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        topology = .TRIANGLE_LIST,
+    }
+
+    viewport := vk.Viewport {
+        width = f32(vulkan.swapchain_extent.width),
+        height = f32(vulkan.swapchain_extent.height),
+        maxDepth = 1.0,
+    }
+    scissor := vk.Rect2D {
+        extent = vulkan.swapchain_extent,
+    }
+    viewport_state := vk.PipelineViewportStateCreateInfo {
+        sType = .PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        viewportCount = 1,
+        pViewports = &viewport,
+        scissorCount = 1,
+        pScissors = &scissor,
+    }
+
+    rasterization_state := vk.PipelineRasterizationStateCreateInfo {
+        sType = .PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        polygonMode = .FILL,
+        cullMode = {},
+        frontFace = .COUNTER_CLOCKWISE,
+        lineWidth = 1.0,
+    }
+
+    multisample_state := vk.PipelineMultisampleStateCreateInfo {
+        sType = .PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        rasterizationSamples = {._1},
+    }
+
+    color_blend_attachment_state := vk.PipelineColorBlendAttachmentState {
+        colorWriteMask = {.R, .G, .B, .A},
+    }
+    color_blend_state := vk.PipelineColorBlendStateCreateInfo {
+        sType = .PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        attachmentCount = 1,
+        pAttachments = &color_blend_attachment_state,
+    }
+
+    dynamic_state := vk.PipelineDynamicStateCreateInfo {
+        sType = .PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+    }
+
+    pipeline_info := vk.GraphicsPipelineCreateInfo {
+        sType = .GRAPHICS_PIPELINE_CREATE_INFO,
+        flags = {},
+        stageCount = u32(len(stages)),
+        pStages = raw_data(stages[:]),
+        pVertexInputState = &vertex_input_state,
+        pInputAssemblyState = &input_assembly_state,
+        pViewportState = &viewport_state,
+        pRasterizationState = &rasterization_state,
+        pMultisampleState = &multisample_state,
+        pColorBlendState = &color_blend_state,
+        pDynamicState = &dynamic_state,
+        layout = pipeline_layout,
+        renderPass = vulkan.render_pass,
+    }
+    when VULKAN_DISABLE_PIPELINE_OPTIMIZATION {
+        pipeline_info.flags += {.DISABLE_OPTIMIZATION}
+    }
+
+    pipeline: vk.Pipeline
+    CHECK(vk.CreateGraphicsPipelines(
+        device = vulkan.device,
+        pipelineCache = vulkan.pipeline_cache,
+        createInfoCount = 1,
+        pCreateInfos = &pipeline_info,
+        pAllocator = nil,
+        pPipelines = &pipeline))
 
     for app_update() {
         CHECK(vk.WaitForFences(vulkan.device, 1, &vulkan.frames[vulkan.frame_idx].fence_in_flight, true, max(u64)))
@@ -1414,81 +1519,132 @@ main :: proc() {
         if !staged {
             staged = true
 
-            // buffer_barriers_before := [?]vk.BufferMemoryBarrier {
-            //     {
-            //         sType = .BUFFER_MEMORY_BARRIER,
-            //         srcAccessMask = {},
-            //         dstAccessMask = {.TRANSFER_READ},
-            //         buffer = model.staging_buffer,
-            //         offset = 0,
-            //         size = vk.DeviceSize(len(model.staging_buffer_data)),
-            //     },
-            //     {
-            //         sType = .BUFFER_MEMORY_BARRIER,
-            //         srcAccessMask = {},
-            //         dstAccessMask = {.TRANSFER_WRITE},
-            //         buffer = model.vertex_buffer,
-            //         offset = 0,
-            //         size = model.vertex_buffer_size,
-            //     },
-            //     {
-            //         sType = .BUFFER_MEMORY_BARRIER,
-            //         srcAccessMask = {},
-            //         dstAccessMask = {.TRANSFER_WRITE},
-            //         buffer = model.index_buffer,
-            //         offset = 0,
-            //         size = model.index_buffer_size,
-            //     },
-            // }
+            buffer_barriers_before := [?]vk.BufferMemoryBarrier {
+                {
+                    sType = .BUFFER_MEMORY_BARRIER,
+                    srcAccessMask = {},
+                    dstAccessMask = {.TRANSFER_WRITE},
+                    buffer = vertex_buffer,
+                    offset = 0,
+                    size = vertex_buffer_size,
+                },
+                {
+                    sType = .BUFFER_MEMORY_BARRIER,
+                    srcAccessMask = {},
+                    dstAccessMask = {.TRANSFER_WRITE},
+                    buffer = index_buffer,
+                    offset = 0,
+                    size = index_buffer_size,
+                },
+                {
+                    sType = .BUFFER_MEMORY_BARRIER,
+                    srcAccessMask = {},
+                    dstAccessMask = {.TRANSFER_WRITE},
+                    buffer = uniform_buffer,
+                    offset = 0,
+                    size = uniform_buffer_size,
+                },
 
-            // vk.CmdPipelineBarrier(
-            //     commandBuffer = cb,
-            //     srcStageMask = {.TOP_OF_PIPE}, dstStageMask = {.TRANSFER},
-            //     dependencyFlags = {},
-            //     memoryBarrierCount = 0, pMemoryBarriers = nil,
-            //     bufferMemoryBarrierCount = u32(len(buffer_barriers_before)), pBufferMemoryBarriers = raw_data(buffer_barriers_before[:]),
-            //     imageMemoryBarrierCount = 0, pImageMemoryBarriers = nil)
+                {
+                    sType = .BUFFER_MEMORY_BARRIER,
+                    srcAccessMask = {},
+                    dstAccessMask = {.TRANSFER_READ},
+                    buffer = vertex_buffer_staging_buffer,
+                    offset = 0,
+                    size = vertex_buffer_size,
+                },
+                {
+                    sType = .BUFFER_MEMORY_BARRIER,
+                    srcAccessMask = {},
+                    dstAccessMask = {.TRANSFER_READ},
+                    buffer = index_buffer_staging_buffer,
+                    offset = 0,
+                    size = index_buffer_size,
+                },
+                {
+                    sType = .BUFFER_MEMORY_BARRIER,
+                    srcAccessMask = {},
+                    dstAccessMask = {.TRANSFER_READ},
+                    buffer = uniform_buffer_staging_buffer,
+                    offset = 0,
+                    size = uniform_buffer_size,
+                },
+            }
 
-            // vk.CmdCopyBuffer(
-            //     commandBuffer = cb,
-            //     srcBuffer = model.staging_buffer,
-            //     dstBuffer = model.vertex_buffer,
-            //     regionCount = u32(len(model.vertex_buffer_regions)),
-            //     pRegions = raw_data(model.vertex_buffer_regions[:]))
+            vk.CmdPipelineBarrier(
+                commandBuffer = cb,
+                srcStageMask = {.TOP_OF_PIPE}, dstStageMask = {.TRANSFER},
+                dependencyFlags = {},
+                memoryBarrierCount = 0, pMemoryBarriers = nil,
+                bufferMemoryBarrierCount = u32(len(buffer_barriers_before)), pBufferMemoryBarriers = raw_data(buffer_barriers_before[:]),
+                imageMemoryBarrierCount = 0, pImageMemoryBarriers = nil)
 
-            // vk.CmdCopyBuffer(
-            //     commandBuffer = cb,
-            //     srcBuffer = model.staging_buffer,
-            //     dstBuffer = model.index_buffer,
-            //     regionCount = u32(len(model.index_buffer_regions)),
-            //     pRegions = raw_data(model.index_buffer_regions[:]))
+            vk.CmdCopyBuffer(
+                commandBuffer = cb,
+                srcBuffer = vertex_buffer_staging_buffer,
+                dstBuffer = vertex_buffer,
+                regionCount = 1,
+                pRegions = &vk.BufferCopy{size = vertex_buffer_size})
 
-            // buffer_barriers_after := [?] vk.BufferMemoryBarrier {
-            //     {
-            //         sType = .BUFFER_MEMORY_BARRIER,
-            //         srcAccessMask = {.TRANSFER_WRITE},
-            //         dstAccessMask = {.VERTEX_ATTRIBUTE_READ},
-            //         buffer = model.vertex_buffer,
-            //         offset = 0,
-            //         size = model.vertex_buffer_size,
-            //     },
-            //     {
-            //         sType = .BUFFER_MEMORY_BARRIER,
-            //         srcAccessMask = {.TRANSFER_WRITE},
-            //         dstAccessMask = {.INDEX_READ},
-            //         buffer = model.index_buffer,
-            //         offset = 0,
-            //         size = model.index_buffer_size,
-            //     },
-            // }
+            vk.CmdCopyBuffer(
+                commandBuffer = cb,
+                srcBuffer = index_buffer_staging_buffer,
+                dstBuffer = index_buffer,
+                regionCount = 1,
+                pRegions = &vk.BufferCopy{size = index_buffer_size})
 
-            // vk.CmdPipelineBarrier(
-            //     commandBuffer = cb,
-            //     srcStageMask = {.TRANSFER}, dstStageMask = {.VERTEX_SHADER},
-            //     dependencyFlags = {},
-            //     memoryBarrierCount = 0, pMemoryBarriers = nil,
-            //     bufferMemoryBarrierCount = u32(len(buffer_barriers_after)), pBufferMemoryBarriers = raw_data(buffer_barriers_after[:]),
-            //     imageMemoryBarrierCount = 0, pImageMemoryBarriers = nil)
+            vk.CmdCopyBuffer(
+                commandBuffer = cb,
+                srcBuffer = uniform_buffer_staging_buffer,
+                dstBuffer = uniform_buffer,
+                regionCount = 1,
+                pRegions = &vk.BufferCopy{size = uniform_buffer_size})
+
+            buffer_barriers_after := [?] vk.BufferMemoryBarrier {
+                {
+                    sType = .BUFFER_MEMORY_BARRIER,
+                    srcAccessMask = {.TRANSFER_WRITE},
+                    dstAccessMask = {.VERTEX_ATTRIBUTE_READ},
+                    buffer = vertex_buffer,
+                    offset = 0,
+                    size = vertex_buffer_size,
+                },
+                {
+                    sType = .BUFFER_MEMORY_BARRIER,
+                    srcAccessMask = {.TRANSFER_WRITE},
+                    dstAccessMask = {.INDEX_READ},
+                    buffer = index_buffer,
+                    offset = 0,
+                    size = index_buffer_size,
+                },
+            }
+
+            vk.CmdPipelineBarrier(
+                commandBuffer = cb,
+                srcStageMask = {.TRANSFER}, dstStageMask = {.VERTEX_INPUT},
+                dependencyFlags = {},
+                memoryBarrierCount = 0, pMemoryBarriers = nil,
+                bufferMemoryBarrierCount = u32(len(buffer_barriers_after)), pBufferMemoryBarriers = raw_data(buffer_barriers_after[:]),
+                imageMemoryBarrierCount = 0, pImageMemoryBarriers = nil)
+
+            buffer_barriers_after2 := [?] vk.BufferMemoryBarrier {
+                {
+                    sType = .BUFFER_MEMORY_BARRIER,
+                    srcAccessMask = {.TRANSFER_WRITE},
+                    dstAccessMask = {.UNIFORM_READ},
+                    buffer = uniform_buffer,
+                    offset = 0,
+                    size = uniform_buffer_size,
+                },
+            }
+
+            vk.CmdPipelineBarrier(
+                commandBuffer = cb,
+                srcStageMask = {.TRANSFER}, dstStageMask = {.VERTEX_SHADER},
+                dependencyFlags = {},
+                memoryBarrierCount = 0, pMemoryBarriers = nil,
+                bufferMemoryBarrierCount = u32(len(buffer_barriers_after2)), pBufferMemoryBarriers = raw_data(buffer_barriers_after2[:]),
+                imageMemoryBarrierCount = 0, pImageMemoryBarriers = nil)
         }
 
         vk.CmdBeginRenderPass(vulkan.frames[vulkan.frame_idx].command_buffer, &{
@@ -1504,21 +1660,33 @@ main :: proc() {
             },
         }, .INLINE)
         {
-            // vk.CmdBindPipeline(cb, .GRAPHICS, pipeline)
-            // offset: vk.DeviceSize = 0
-            // vk.CmdBindVertexBuffers(
-            //     commandBuffer = cb,
-            //     firstBinding = 0, bindingCount = 1,
-            //     pBuffers = &model.vertex_buffer, pOffsets = &offset)
-            // vk.CmdBindIndexBuffer(
-            //     commandBuffer = cb,
-            //     buffer = model.index_buffer,
-            //     offset = 0,
-            //     indexType = .UINT16)
-            // vk.CmdDrawIndexed(
-            //     commandBuffer = cb,
-            //     indexCount = u32(model.index_buffer_size/size_of(u16)), instanceCount = u32(model.vertex_buffer_size/size_of(Instance)),
-            //     firstIndex = 0, vertexOffset = 0, firstInstance = 0)
+            vk.CmdBindPipeline(cb, .GRAPHICS, pipeline)
+            offset: vk.DeviceSize = 0
+            vk.CmdBindVertexBuffers(
+                commandBuffer = cb,
+                firstBinding = 0, bindingCount = 1,
+                pBuffers = &vertex_buffer, pOffsets = &offset)
+            vk.CmdBindIndexBuffer(
+                commandBuffer = cb,
+                buffer = index_buffer,
+                offset = 0,
+                indexType = .UINT16)
+            vk.CmdBindDescriptorSets(
+                commandBuffer = cb,
+                pipelineBindPoint = .GRAPHICS,
+                layout = pipeline_layout,
+                firstSet = 0,
+                descriptorSetCount = 1,
+                pDescriptorSets = &descriptor_set,
+                dynamicOffsetCount = 0,
+                pDynamicOffsets = nil)
+            vk.CmdDrawIndexed(
+                commandBuffer = cb,
+                indexCount = u32(index_buffer_size/size_of(u16)), 
+                instanceCount = 1,
+                firstIndex = 0, 
+                vertexOffset = 0, 
+                firstInstance = 0)
         }
         vk.CmdEndRenderPass(vulkan.frames[vulkan.frame_idx].command_buffer)
 
