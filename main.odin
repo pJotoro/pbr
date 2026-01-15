@@ -868,21 +868,6 @@ main :: proc() {
     }
 
     assert(len(cgltf_data.buffers) == 1)
-    // buffer{
-    //  name = "",
-    //  size = 1756,
-    //  uri = "",
-    //  data = 0x0,
-    //  data_free_method = "none",
-    //  extras = extras_t{
-    //      start_offset = 0,
-    //      end_offset = 0,
-    //      data = <nil>,
-    //  },
-    //  extensions_count = 0,
-    //  extensions = <nil>,
-    // }
-
     assert(len(cgltf_data.images) == 0)
     assert(len(cgltf_data.textures) == 0)
     assert(len(cgltf_data.samplers) == 0)
@@ -918,256 +903,6 @@ main :: proc() {
     }
 
     assert(len(cgltf_data.scenes) == 1)
-    // scene{
-    //  name = "Scene",
-    //  nodes = [
-    //      &node{
-    //          name = "Donut",
-    //          parent = <nil>,
-    //          children = [],
-    //          skin = <nil>,
-    //          mesh = 0x21C6DEF7EAE,
-    //          camera = <nil>,
-    //          light = <nil>,
-    //          weights = [],
-    //          has_translation = true,
-    //          has_rotation = true,
-    //          has_scale = true,
-    //          has_matrix = false,
-    //          translation = [
-    //              0,
-    //              0.025177613,
-    //              0,
-    //          ],
-    //          rotation = [
-    //              0,
-    //              -0.7889224,
-    //              0,
-    //              0.61449289,
-    //          ],
-    //          scale = [
-    //              1,
-    //              1.0000026,
-    //              1,
-    //          ],
-    //          matrix_ = [
-    //              1,
-    //              0,
-    //              0,
-    //              0,
-    //              0,
-    //              1,
-    //              0,
-    //              0,
-    //              0,
-    //              0,
-    //              1,
-    //              0,
-    //              0,
-    //              0,
-    //              0,
-    //              1,
-    //          ],
-    //          extras = extras_t{
-    //              start_offset = 0,
-    //              end_offset = 0,
-    //              data = <nil>,
-    //          },
-    //          has_mesh_gpu_instancing = false,
-    //          mesh_gpu_instancing = mesh_gpu_instancing{
-    //              attributes = [],
-    //          },
-    //          extensions_count = 0,
-    //          extensions = <nil>,
-    //      },
-    //      &node{
-    //          name = "Table",
-    //          parent = <nil>,
-    //          children = [],
-    //          skin = <nil>,
-    //          mesh = 0x21C6DEF7F0E,
-    //          camera = <nil>,
-    //          light = <nil>,
-    //          weights = [],
-    //          has_translation = true,
-    //          has_rotation = false,
-    //          has_scale = true,
-    //          has_matrix = false,
-    //          translation = [
-    //              -1.2678384,
-    //              -0.001,
-    //              -3.2460144,
-    //          ],
-    //          rotation = [
-    //              0,
-    //              0,
-    //              0,
-    //              1,
-    //          ],
-    //          scale = [
-    //              0.33391109,
-    //              0.33391109,
-    //              0.33391109,
-    //          ],
-    //          matrix_ = [
-    //              1,
-    //              0,
-    //              0,
-    //              0,
-    //              0,
-    //              1,
-    //              0,
-    //              0,
-    //              0,
-    //              0,
-    //              1,
-    //              0,
-    //              0,
-    //              0,
-    //              0,
-    //              1,
-    //          ],
-    //          extras = extras_t{
-    //              start_offset = 0,
-    //              end_offset = 0,
-    //              data = <nil>,
-    //          },
-    //          has_mesh_gpu_instancing = false,
-    //          mesh_gpu_instancing = mesh_gpu_instancing{
-    //              attributes = [],
-    //          },
-    //          extensions_count = 0,
-    //          extensions = <nil>,
-    //      },
-    //      &node{
-    //          name = "Abstract Plate",
-    //          parent = <nil>,
-    //          children = [],
-    //          skin = <nil>,
-    //          mesh = 0x21C6DEF7F6E,
-    //          camera = <nil>,
-    //          light = <nil>,
-    //          weights = [],
-    //          has_translation = true,
-    //          has_rotation = false,
-    //          has_scale = false,
-    //          has_matrix = false,
-    //          translation = [
-    //              0,
-    //              0.0051408298,
-    //              0,
-    //          ],
-    //          rotation = [
-    //              0,
-    //              0,
-    //              0,
-    //              1,
-    //          ],
-    //          scale = [
-    //              1,
-    //              1,
-    //              1,
-    //          ],
-    //          matrix_ = [
-    //              1,
-    //              0,
-    //              0,
-    //              0,
-    //              0,
-    //              1,
-    //              0,
-    //              0,
-    //              0,
-    //              0,
-    //              1,
-    //              0,
-    //              0,
-    //              0,
-    //              0,
-    //              1,
-    //          ],
-    //          extras = extras_t{
-    //              start_offset = 0,
-    //              end_offset = 0,
-    //              data = <nil>,
-    //          },
-    //          has_mesh_gpu_instancing = false,
-    //          mesh_gpu_instancing = mesh_gpu_instancing{
-    //              attributes = [],
-    //          },
-    //          extensions_count = 0,
-    //          extensions = <nil>,
-    //      },
-    //      &node{
-    //          name = "Vast",
-    //          parent = <nil>,
-    //          children = [
-    //              0x21C6DEF641A,
-    //          ],
-    //          skin = <nil>,
-    //          mesh = 0x21C6DEF802E,
-    //          camera = <nil>,
-    //          light = <nil>,
-    //          weights = [],
-    //          has_translation = true,
-    //          has_rotation = false,
-    //          has_scale = false,
-    //          has_matrix = false,
-    //          translation = [
-    //              0.27141318,
-    //              0,
-    //              -0.22245401,
-    //          ],
-    //          rotation = [
-    //              0,
-    //              0,
-    //              0,
-    //              1,
-    //          ],
-    //          scale = [
-    //              1,
-    //              1,
-    //              1,
-    //          ],
-    //          matrix_ = [
-    //              1,
-    //              0,
-    //              0,
-    //              0,
-    //              0,
-    //              1,
-    //              0,
-    //              0,
-    //              0,
-    //              0,
-    //              1,
-    //              0,
-    //              0,
-    //              0,
-    //              0,
-    //              1,
-    //          ],
-    //          extras = extras_t{
-    //              start_offset = 0,
-    //              end_offset = 0,
-    //              data = <nil>,
-    //          },
-    //          has_mesh_gpu_instancing = false,
-    //          mesh_gpu_instancing = mesh_gpu_instancing{
-    //              attributes = [],
-    //          },
-    //          extensions_count = 0,
-    //          extensions = <nil>,
-    //      },
-    //  ],
-    //  extras = extras_t{
-    //      start_offset = 0,
-    //      end_offset = 0,
-    //      data = <nil>,
-    //  },
-    //  extensions_count = 0,
-    //  extensions = <nil>,
-    // }
 
     assert(cgltf_data.animations == nil)
     assert(cgltf_data.variants == nil)
@@ -1175,24 +910,6 @@ main :: proc() {
     assert(cgltf_data.extensions_required == nil)
 
     vertex_buffer_size, index_buffer_size, uniform_buffer_size: vk.DeviceSize
-
-    for buffer_view in cgltf_data.buffer_views {
-        // buffer_view.name
-        assert(buffer_view.buffer != nil)
-        assert(buffer_view.stride == 0)
-        switch buffer_view.type {
-            case .invalid:
-            case .vertices:
-                vertex_buffer_size += vk.DeviceSize(buffer_view.size)
-            case .indices:
-                index_buffer_size += vk.DeviceSize(buffer_view.size)
-        }
-        assert(buffer_view.data == nil)
-        assert(!buffer_view.has_meshopt_compression)
-        assert(buffer_view.meshopt_compression == {})
-        assert(buffer_view.extras == {})
-        assert(buffer_view.extensions_count == 0)
-    }
 
     for node in cgltf_data.nodes {
         if node.name == "Donut" {
@@ -1202,10 +919,15 @@ main :: proc() {
             uniform_buffer_size += size_of(Vector4)
             assert(node.has_scale == true)
             uniform_buffer_size += size_of(Vector3)
+
+            for primitive in node.mesh.primitives {
+                for attribute in primitive.attributes {
+                    dprintf("%#v", attribute.data, newline=true)
+                }
+                index_buffer_size = vk.DeviceSize(primitive.indices.buffer_view.size)
+            }
         }
     }
-
-    assert(vertex_buffer_size + index_buffer_size == vk.DeviceSize(len(cgltf_data.bin)))
 
     vulkan_allocator := vulkan_create_allocator()
 
