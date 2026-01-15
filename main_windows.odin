@@ -26,21 +26,21 @@ win32_get_monitor :: proc() -> win32.HMONITOR {
     return ctx.monitor
 }
 
+// Whether or not these procedures succeed to allocate the string doesn't really matter because either way, a fatal error has happened.
 @(private="file")
-get_last_error_message :: proc() -> (string, runtime.Allocator_Error) #optional_allocator_error {
+get_last_error_message :: proc() -> string {
     error := win32.GetLastError()
     buf: [512]u16 = ---
     win32.FormatMessageW(win32.FORMAT_MESSAGE_FROM_SYSTEM, nil, error, 0, raw_data(buf[:]), win32.DWORD(len(buf)), nil)
-    res, err := win32.wstring_to_utf8_alloc(cstring16(raw_data(buf[:])), -1)
-    return strings.trim_suffix(res, "\n"), err
+    res, _ := win32.wstring_to_utf8_alloc(cstring16(raw_data(buf[:])), -1)
+    return strings.trim_suffix(res, "\n")
 }
-
 @(private="file")
-format_hresult :: proc(hr: win32.HRESULT) -> (string, runtime.Allocator_Error) #optional_allocator_error {
+format_hresult :: proc(hr: win32.HRESULT) -> string {
     buf: [512]u16 = ---
     win32.FormatMessageW(win32.FORMAT_MESSAGE_FROM_SYSTEM, nil, u32(hr), 0, raw_data(buf[:]), win32.DWORD(len(buf)), nil)
-    res, err := win32.wstring_to_utf8_alloc(cstring16(raw_data(buf[:])), -1)
-    return strings.trim_suffix(res, "\n"), err
+    res, _ := win32.wstring_to_utf8_alloc(cstring16(raw_data(buf[:])), -1)
+    return strings.trim_suffix(res, "\n")
 }
 
 app_init :: proc() -> (w, h: int, refresh_rate: int) {
