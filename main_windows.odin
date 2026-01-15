@@ -81,7 +81,7 @@ _app_init :: proc() -> (w, h: int, refresh_rate: int, ok: bool) {
     }
     
     if ctx.window = win32.CreateWindowExW(
-        dwExStyle = 0, // win32.WS_EX_TOPMOST, 
+        dwExStyle = win32.WS_EX_TOPMOST if APP_TOPMOST else 0, 
         
         lpClassName = ctx.window_class.lpszClassName, 
         lpWindowName = L("pbr"),

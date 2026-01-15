@@ -167,14 +167,14 @@ main :: proc() {
     } else {
         if (vk.EnumerateInstanceVersion == nil) {
             when VULKAN_MINIMUM_VERSION > vk.API_VERSION_1_0 {
-                fmt.panicf("Your system only supports Vulkan 1.0, but at least Vulkan %v is required", api_version_to_string(VULKAN_MINIMUM_VERSION))
+                fmt.panicf("Your system only supports Vulkan 1.0, but at least Vulkan %v is required"., api_version_to_string(VULKAN_MINIMUM_VERSION))
             } else {
                 api_version = vk.API_VERSION_1_0
             }
         } else {
             CHECK(vk.EnumerateInstanceVersion(&api_version))
             if api_version < VULKAN_MINIMUM_VERSION {
-                fmt.panicf("Your system only supports Vulkan %v, but at least Vulkan %v is required", 
+                fmt.panicf("Your system only supports Vulkan %v, but at least Vulkan %v is required.", 
                     api_version_to_string(api_version), api_version_to_string(VULKAN_MINIMUM_VERSION))
             } else if api_version > VULKAN_DESIRED_VERSION {
                 api_version = VULKAN_DESIRED_VERSION
@@ -265,7 +265,7 @@ main :: proc() {
         }
     }
     if len(missing_instance_extensions) > 0 {
-        fmt.panicf("Your system is missing these instance extensions: %v", missing_instance_extensions)
+        fmt.panicf("Your system is missing these instance extensions: %v.", missing_instance_extensions[:])
     }
 
     for extension in desired_instance_extensions {
@@ -518,7 +518,7 @@ main :: proc() {
         }
     }
     if len(missing_device_extensions) > 0 {
-        fmt.panicf("Your system is missing these device extensions: %v", missing_device_extensions)
+        fmt.panicf("Your system is missing these device extensions: %v.", missing_device_extensions[:])
     }
 
     desired_device_extensions := [?]cstring {
@@ -719,7 +719,7 @@ main :: proc() {
 
     cgltf_data: ^cgltf.data
     if d, r := cgltf_load("assets/chocolate_donut.glb"); r != .success {
-        panic("Failed to load assets/chocolate_donut.glb")
+        panic("Failed to load assets/chocolate_donut.glb.")
     } else {
         cgltf_data = d
     }

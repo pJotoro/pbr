@@ -18,7 +18,7 @@
 	[
 		{
 			"name": "debug",
-			"cmd": "odin build . -out:build/debug/pbr.exe -subsystem:windows -target-features:avx2 -debug -define:VULKAN_DEBUG=false",
+			"cmd": "odin build . -out:build/debug/pbr.exe -subsystem:windows -target-features:avx2 -debug -define:VULKAN_DEBUG=true",
 			"file_regex":  "^(.+)\\(([0-9]+):([0-9]+)\\) (.+)$",
 		},
 		{

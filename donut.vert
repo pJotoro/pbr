@@ -8,8 +8,13 @@ layout (binding = 0, set = 0) uniform Uniform {
 	vec3 translation;
 	vec4 rotation;
 	vec3 scale;
-} uniforms;
+} u;
 
 void main() {
-	gl_Position = vec4(in_pos, 1.0);
+	vec4 pos = vec4(in_pos, 1.0);
+	pos.xyz += u.translation;
+	// TODO: Rotation
+	pos.xyz *= u.scale;
+
+	gl_Position = pos;
 }
