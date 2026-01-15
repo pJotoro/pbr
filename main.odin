@@ -132,7 +132,11 @@ main :: proc() {
     dt := 1.0/f32(refresh_rate)
 
     vulkan: Vulkan
-    vulkan.arena = mem.arena_allocator(&{data = make([]byte, mem.Megabyte)})
+    if data, err := make([]byte, mem.Megabyte); err != .None {
+        panic("Out of memory.")
+    } else {
+        vulkan.arena = mem.arena_allocator(&{data = data})
+    }
     
     {
         did_load: bool
@@ -167,7 +171,7 @@ main :: proc() {
     } else {
         if (vk.EnumerateInstanceVersion == nil) {
             when VULKAN_MINIMUM_VERSION > vk.API_VERSION_1_0 {
-                fmt.panicf("Your system only supports Vulkan 1.0, but at least Vulkan %v is required"., api_version_to_string(VULKAN_MINIMUM_VERSION))
+                fmt.panicf("Your system only supports Vulkan 1.0, but at least Vulkan %v is required.", api_version_to_string(VULKAN_MINIMUM_VERSION))
             } else {
                 api_version = vk.API_VERSION_1_0
             }
